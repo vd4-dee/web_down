@@ -1,0 +1,153 @@
+/* static/css/style.css */
+body {
+    font-family: Arial, sans-serif; /* Common sans-serif font */
+    line-height: 1.6;
+    margin: 20px;
+    background-color: #f4f7f6; /* Light background */
+    color: #333; /* Default text color */
+}
+
+h1, h2 {
+    border-bottom: 2px solid #007bff; /* Highlight headings */
+    padding-bottom: 8px;
+    margin-top: 30px;
+    color: #0056b3; /* Darker blue for headings */
+}
+
+#control-panel, #status-panel, #log-panel {
+    margin-bottom: 30px;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px; /* Softer corners */
+    background-color: #ffffff; /* White background for panels */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); /* Subtle shadow */
+}
+
+label {
+    display: inline-block;
+    width: 170px; /* Adjust width for alignment */
+    margin-bottom: 8px;
+    font-weight: bold; /* Make labels slightly bolder */
+    vertical-align: top; /* Align top for multi-line elements like region selection */
+}
+
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="text"],
+select {
+    padding: 10px; /* More padding */
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 280px; /* Adjust input width */
+    box-sizing: border-box; /* Include padding and border in element's total width */
+}
+
+button {
+    padding: 10px 20px; /* More padding */
+    background-color: #007bff; /* Primary button color */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 10px;
+    font-size: 1em;
+    transition: background-color 0.2s ease; /* Smooth hover effect */
+}
+
+button:hover:not(:disabled) {
+    background-color: #0056b3; /* Darker shade on hover */
+}
+
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+#refresh-log-button {
+    background-color: #6c757d; /* Secondary button color */
+    float: right; /* Position refresh button */
+}
+#refresh-log-button:hover:not(:disabled) {
+     background-color: #5a6268;
+}
+
+
+#loading-indicator {
+    font-style: italic;
+    color: #555;
+    margin-left: 10px;
+}
+
+#region-selection {
+    margin-top: 10px;
+    padding-left: 175px; /* Indent to align with inputs */
+    display: inline-block; /* Better alignment with label */
+    width: calc(100% - 180px); /* Adjust width */
+}
+#region-selection label {
+    width: auto; /* Allow checkbox labels to fit content */
+    margin-left: 5px;
+    font-weight: normal; /* Normal weight for checkbox labels */
+}
+#region-selection input[type="checkbox"]{
+     width: auto; /* Default checkbox width */
+     margin-right: 3px;
+     vertical-align: middle; /* Align checkbox with text */
+}
+
+
+#status-messages {
+    height: 250px; /* Slightly taller status box */
+    overflow-y: scroll;
+    border: 1px solid #eee;
+    background-color: #fdfdfd; /* Slightly off-white background */
+    padding: 15px;
+    margin-top: 10px;
+    font-size: 0.9em;
+    white-space: pre-wrap; /* Preserve whitespace and newlines */
+    font-family: "Courier New", Courier, monospace; /* Monospace font for status */
+    line-height: 1.4; /* Adjust line spacing */
+}
+#status-messages p {
+    margin: 3px 0; /* Tighter spacing between status lines */
+    word-wrap: break-word; /* Wrap long lines */
+}
+
+#log-panel h2 {
+    display: inline-block; /* Keep heading and button on same line */
+}
+
+#log-table-container {
+    margin-top: 15px;
+    max-height: 350px; /* Taller log table */
+    overflow: auto; /* Add scrollbars if needed */
+    border: 1px solid #eee;
+}
+
+.log-table { /* Style the log table */
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85em; /* Smaller font for log table */
+}
+
+.log-table th, .log-table td {
+    border: 1px solid #ddd;
+    padding: 8px 10px; /* Adjust padding */
+    text-align: left;
+    vertical-align: top; /* Align cell content top */
+}
+
+.log-table th {
+    background-color: #e9ecef; /* Light grey header */
+    position: sticky; /* Make header sticky */
+    top: 0; /* Stick to the top of the container */
+    z-index: 1;
+}
+
+.log-table tr:nth-child(even) {
+    background-color: #f8f9fa; /* Zebra striping */
+}
