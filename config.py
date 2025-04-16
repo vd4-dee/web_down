@@ -1,37 +1,70 @@
-# config.py
+# filename: config.py
 import os
-# Recommended: Use a library like python-dotenv to load secrets from a .env file
-# Example:
+# Recommended: Use python-dotenv for environment variables (pip install python-dotenv)
 # from dotenv import load_dotenv
-# load_dotenv() # Load variables from .env file into environment
+# load_dotenv()
 
-# !!! IMPORTANT: Avoid committing sensitive data like secrets directly into code !!!
-# Consider using Environment Variables or a dedicated secrets management system.
+# ==============================================================================
+# !!! CRITICAL SECURITY WARNING !!!
+# ==============================================================================
+# DO NOT commit sensitive information like OTP secrets or passwords directly
+# into your source code repository (like Git).
+# PREFERRED METHODS:
+# 1. Environment Variables: Set OTP_SECRET, DEFAULT_PASSWORD etc. in your
+#    operating system's environment. The code below will use them if found.
+# 2. Secrets Management Tools: Use tools like HashiCorp Vault, AWS Secrets Manager,
+#    Azure Key Vault, or Doppler for production environments.
+# 3. .env Files (for local development ONLY): Store secrets in a `.env` file
+#    in your project root (ensure `.env` is listed in your `.gitignore` file)
+#    and use `python-dotenv` to load them.
+#
+# Storing secrets directly in code is a major security risk.
+# The hardcoded values below are **EXAMPLES ONLY** and **MUST** be replaced
+# with a secure method before deployment or sharing.
+# ==============================================================================
 
 # --- Required Configuration ---
-# Load from environment variables if available, otherwise use hardcoded (less secure)
-OTP_SECRET = os.getenv('OTP_SECRET', 'TAPHLYTABSKHTZWM') # Replace with your actual OTP secret key or set ENV VAR
-DRIVER_PATH = os.getenv('CHROMEDRIVER_PATH', os.path.abspath('chromedriver.exe')) # Or absolute path
-DOWNLOAD_BASE_PATH = os.getenv('DOWNLOAD_PATH', os.path.abspath(r"D:\Base\Checking")) # Base folder
+# Load from environment variables first, then fallback to hardcoded (unsafe) example
+OTP_SECRET = os.getenv('OTP_SECRET', 'TAPHLYTABSKHTZWM') # <-- REPLACE or set ENV VAR
+DRIVER_PATH = os.getenv('CHROMEDRIVER_PATH', os.path.abspath('chromedriver.exe')) # Verify path or set ENV VAR
+DOWNLOAD_BASE_PATH = os.getenv('DOWNLOAD_PATH', os.path.abspath(r"D:\Base\Checking")) # Verify path or set ENV VAR
 
-# --- Optional Configuration (leave empty to require input on UI) ---
+# --- Optional Configuration (UI Defaults) ---
 DEFAULT_EMAIL = os.getenv('DEFAULT_EMAIL', 'khangvd4')
-# Avoid storing default password here if possible. Prefer UI input.
-DEFAULT_PASSWORD = os.getenv('DEFAULT_PASSWORD', 'toiGHEThack@123') # Leave empty or load from ENV VAR if absolutely needed
-
-# DRIVER_PORT = 9515 # This port seems unused in the current logic? Verify if needed.
+# Set DEFAULT_PASSWORD environment variable or leave empty for UI input (recommended)
+DEFAULT_PASSWORD = os.getenv('DEFAULT_PASSWORD', 'toiGHEThack@123') # <-- REMOVE or set ENV VAR, avoid hardcoding password
 
 # --- Other Configuration ---
 # List of report URLs that require region selection
 REGION_REQUIRED_REPORT_URLS = [
     'https://bi.nhathuoclongchau.com.vn/MIS/PHAR/PHARFAF030.aspx'
-    # Add other report URLs if they require region selection
+    # Add other report URLs here if they need region selection
 ]
 
-# --- Validation (Optional but recommended) ---
-if not OTP_SECRET or OTP_SECRET == 'YOUR_DEFAULT_OTP_SECRET_HERE':
-    print("WARNING: OTP_SECRET is not configured securely. Please set the environment variable or update config.py.")
+
+# --- Validation and Warnings ---
+if not OTP_SECRET or OTP_SECRET == 'TAPHLYTABSKHTZWM': # Check against the example value
+    print("\n" + "="*60)
+    print("== WARNING: OTP_SECRET is using the default example value or is empty! ==")
+    print("== Please configure it securely via Environment Variables or other methods. ==")
+    print("="*60 + "\n")
+
+if DEFAULT_PASSWORD and DEFAULT_PASSWORD != '': # Check if password is hardcoded
+    print("\n" + "="*60)
+    print("== WARNING: DEFAULT_PASSWORD is set in config.py! ==")
+    print("== It's highly recommended to use Environment Variables or leave it empty ==")
+    print("== for the user to input it in the UI. ==")
+    print("="*60 + "\n")
+
 if not os.path.exists(DRIVER_PATH):
-     print(f"WARNING: ChromeDriver path does not exist: {DRIVER_PATH}. Please check the path or set CHROMEDRIVER_PATH environment variable.")
+     print(f"\nWARNING: ChromeDriver path does not exist: {DRIVER_PATH}. Automation will likely fail. Check the path or set the CHROMEDRIVER_PATH environment variable.\n")
+
 if not os.path.exists(DOWNLOAD_BASE_PATH):
-     print(f"WARNING: Download base path does not exist: {DOWNLOAD_BASE_PATH}. It might be created automatically, but check configuration.")
+     print(f"\nWARNING: Download base path does not exist: {DOWNLOAD_BASE_PATH}. The application will attempt to create it, but please verify the configuration.\n")
+
+REPORTS = [
+    {
+        "name": "FAF030",
+        "url": "https://bi.nhathuoclongchau.com.vn/MIS/PHAR/PHARFAF030.aspx"
+    }
+]

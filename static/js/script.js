@@ -345,14 +345,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- End Validation ---
 
         try {
-            // Backend expects flat lists, convert data structure
+            // Backend expects 'reports' as an array of objects, not flat lists
             const dataToSend = {
                 email: currentData.email,
                 password: currentData.password,
-                report_type: currentData.reports.map(r => r.report_type),
-                from_date: currentData.reports.map(r => r.from_date),
-                to_date: currentData.reports.map(r => r.to_date),
-                chunk_size: currentData.reports.map(r => r.chunk_size),
+                reports: currentData.reports, // Array of objects
                 regions: currentData.regions // Already a list of strings (indices)
             };
 

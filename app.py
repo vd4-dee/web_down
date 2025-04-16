@@ -1,4 +1,4 @@
-# app.py
+# filename: app.py
 import flask # type: ignore
 from flask import Flask, render_template, request, jsonify, Response # type: ignore
 import threading
@@ -6,143 +6,111 @@ import time
 import csv
 import os
 import pyotp # type: ignore
-from datetime import datetime, timezone, timedelta # Import timezone for scheduler
+from datetime import datetime, timezone, timedelta
 import pandas as pd # type: ignore
-# import math # Removed if not used
 import json
 import traceback
-import atexit # For graceful scheduler shutdown
-from selenium.common.exceptions import WebDriverException # Import specific exception
+import atexit
+from selenium.common.exceptions import WebDriverException
 
-# --- Scheduling Imports ---
+# Scheduling Imports
 from apscheduler.schedulers.background import BackgroundScheduler # type: ignore
-# RECOMMENDATION: Use a persistent job store for production
-# from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore # Example
-from apscheduler.jobstores.memory import MemoryJobStore # Using memory store for now # type: ignore
+from apscheduler.jobstores.memory import MemoryJobStore # type: ignore
 from apscheduler.triggers.date import DateTrigger # type: ignore
-# from apscheduler.triggers.cron import CronTrigger # Uncomment if using cron
 from apscheduler.executors.pool import ThreadPoolExecutor # type: ignore
-from apscheduler.jobstores.base import JobLookupError # type: ignore # For specific error handling
+from apscheduler.jobstores.base import JobLookupError # type: ignore
 
-# --- Local Imports ---
-# Assume config.py, logic_download.py, link_report.py are in the same directory
+# Local Imports
 import config
-# Ensure logic_download has necessary classes/functions and they are updated
-# Import specific exception if defined in logic_download for better error handling
-from logic_download import WebAutomation, regions_data # , DownloadFailedException # Example custom exception
+from logic_download import WebAutomation, regions_data, DownloadFailedException # Import custom exception
 import link_report
 
 app = Flask(__name__)
 
-# --- Constants ---
+# Constants
 CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'configs.json')
-LOG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'download_log.csv')
+LOG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'download_log.csv') # Match logic_download default?
 
-# --- Global variables for state management ---
-status_messages = [] # Stores status updates for SSE
-is_running = False   # Flag to indicate if a download process is active
-download_thread = None # Holds the current download thread object
-lock = threading.Lock() # Lock for synchronizing access to shared resources (is_running, status_messages, config file, scheduler)
+# Global state
+status_messages = []
+is_running = False
+download_thread = None
+lock = threading.Lock() # Protects is_running, status_messages, config file, scheduler
 
-# --- Scheduler Setup ---
-jobstores = {
-    # 'default': SQLAlchemyJobStore(url='sqlite:///jobs.sqlite') # Example persistent store
-    'default': MemoryJobStore() # Schedules lost on restart - Use persistent for production if needed
-}
-executors = {
-    # Consider reducing pool size (e.g., 1 or 2) if downloads are resource-intensive
-    # or if sequential execution is preferred for stability.
-    'default': ThreadPoolExecutor(5) # Allow up to 5 jobs concurrently (if using persistent store and needed)
-}
-job_defaults = {
-    'coalesce': True, # Run missed jobs only once if scheduler was down
-    'max_instances': 1 # Prevent multiple instances of the same job running simultaneously
-}
-# Using UTC is generally recommended for scheduling to avoid DST issues
-scheduler = BackgroundScheduler(
-    jobstores=jobstores,
-    executors=executors,
-    job_defaults=job_defaults,
-    timezone=timezone.utc # Use UTC timezone
-)
+# Scheduler Setup
+jobstores = {'default': MemoryJobStore()}
+executors = {'default': ThreadPoolExecutor(2)} # Reduced pool size for sequential stability
+job_defaults = {'coalesce': True, 'max_instances': 1}
+scheduler = BackgroundScheduler(jobstores=jobstores, executors=executors, job_defaults=job_defaults, timezone=timezone.utc)
 
-# --- Utility Functions ---
-
+# Utility Functions
 def load_configs():
-    """Loads configurations from the JSON file safely."""
-    if not os.path.exists(CONFIG_FILE_PATH):
-        return {}
+    """Loads configurations safely."""
+    if not os.path.exists(CONFIG_FILE_PATH): return {}
     try:
-        # Use lock for consistency, though reading might be less critical than writing
-        with lock:
+        with lock: # Lock for reading consistency (optional but safer)
             with open(CONFIG_FILE_PATH, 'r', encoding='utf-8') as f:
                 content = f.read()
-                if not content:
-                    return {} # Return empty dict if file is empty
+                if not content: return {}
                 return json.loads(content)
-    except (json.JSONDecodeError, IOError, FileNotFoundError) as e:
+    except (json.JSONDecodeError, IOError) as e:
         print(f"Error loading config file {CONFIG_FILE_PATH}: {e}")
-        return {} # Return empty dict on error
+        return {}
 
 def save_configs(configs):
-    """Saves configurations to the JSON file safely."""
+    """Saves configurations safely."""
     try:
-        with lock: # Lock is crucial for writing to prevent race conditions
+        with lock: # Lock is crucial for writing
             with open(CONFIG_FILE_PATH, 'w', encoding='utf-8') as f:
                 json.dump(configs, f, indent=4, ensure_ascii=False)
     except IOError as e:
         print(f"Error saving config file {CONFIG_FILE_PATH}: {e}")
 
 def stream_status_update(message):
-    """Adds a message to the status list for SSE and logs to console."""
+    """Adds a message to the status list for SSE."""
     global status_messages
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # Use local time for display
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     full_message = f"{timestamp}: {message}"
-    print(full_message) # Log to console for backend visibility
-    with lock: # Lock access to the shared status_messages list
+    print(full_message) # Log to console
+    with lock:
         status_messages.append(full_message)
-        # Optional: Trim the list to prevent excessive memory usage
         MAX_LOG_MESSAGES = 500
         if len(status_messages) > MAX_LOG_MESSAGES:
             status_messages = status_messages[-MAX_LOG_MESSAGES:]
 
 
-# --- Download Process Function (Executed in Background Thread) ---
-
+# --- Download Process Function ---
 def run_download_process(params):
-    """
-    Main function to handle the entire download process for a given set of parameters.
-    Executed in a separate thread.
-    """
+    """Main download function executed in a background thread."""
     global is_running, status_messages
     automation = None
-    process_successful = True # Flag to track overall success of all reports
+    process_successful = True # Assume success initially
 
-    # Set running state and clear previous messages within lock
+    # --- Setup within Lock ---
     with lock:
+        if is_running: # Double check inside lock
+             print("Download process already running, exiting new thread request.")
+             # Cannot easily send status back from here, rely on API response
+             return
         is_running = True
-        status_messages = [] # Clear logs from previous runs
+        status_messages = [] # Clear logs for this run
+
+    stream_status_update("Starting report download process...")
 
     try:
-        # Extract parameters
+        # --- Extract Parameters ---
+        # These are guaranteed by validation in handle_start_download or loaded config structure
         email = params['email']
         password = params['password']
-        report_types = params['report_type'] if isinstance(params['report_type'], list) else [params['report_type']]
-        from_dates = params['from_date'] if isinstance(params['from_date'], list) else [params['from_date']]
-        to_dates = params['to_date'] if isinstance(params['to_date'], list) else [params['to_date']]
-        chunk_sizes = params['chunk_size'] if isinstance(params['chunk_size'], list) else [params['chunk_size']]
-        # Region indices are expected as strings from the frontend
-        selected_regions_indices_str = params.get('regions', []) # Already a list of strings
-        
-        stream_status_update(f"Report types to process: {report_types}") # Thêm dòng này
-        for i in range(len(report_types)):
-            report_type_key = report_types[i]
-            stream_status_update(f"--- Starting processing for report index {i}: {report_type_key} ---") # Thêm dòng này
-            # ... (code còn lại của vòng lặp)
-            stream_status_update(f"--- Finished processing for report index {i}: {report_type_key} ---") # Thêm dòng này
+        # 'reports' is expected to be a LIST of DICTIONARIES
+        reports_to_download = params.get('reports', [])
+        # 'regions' is expected to be a list of strings (indices)
+        selected_regions_indices_str = params.get('regions', [])
+
+        if not reports_to_download:
+            raise ValueError("No reports configured for download.")
 
         # --- Prepare Download Folder ---
-        # Create a unique subfolder for this run to avoid file conflicts
         timestamp_folder = datetime.now().strftime("%Y%m%d_%H%M%S")
         specific_download_folder = os.path.join(config.DOWNLOAD_BASE_PATH, timestamp_folder)
         try:
@@ -153,166 +121,147 @@ def run_download_process(params):
 
         # --- Initialize Automation ---
         stream_status_update("Initializing browser automation...")
-        # Pass the specific, newly created folder to the automation class
-        automation = WebAutomation(config.DRIVER_PATH, specific_download_folder)
+        # Pass status callback to WebAutomation constructor
+        automation = WebAutomation(config.DRIVER_PATH, specific_download_folder, status_callback=stream_status_update)
 
         # --- Login ---
         stream_status_update(f"Logging in with user: {email}...")
-        # Need a URL to initiate login, use the first report's URL
-        if not report_types:
-            raise ValueError("No report types specified.")
-        first_report_url = link_report.get_report_url(report_types[0])
+        # Use first report's URL for login initiation
+        first_report_info = reports_to_download[0]
+        first_report_url = link_report.get_report_url(first_report_info.get('report_type'))
         if not first_report_url:
-            raise ValueError(f"Could not find URL for initial report type '{report_types[0]}' needed for login.")
-
-        # Check OTP secret configuration
+            raise ValueError(f"Could not find URL for initial report type '{first_report_info.get('report_type')}' needed for login.")
         if not config.OTP_SECRET:
-            raise ValueError("OTP_SECRET is not configured in config.py or environment variables.")
+            raise ValueError("OTP_SECRET is not configured.")
 
-        # Perform login - The login method in WebAutomation should handle retries
         if not automation.login(first_report_url, email, password, config.OTP_SECRET, status_callback=stream_status_update):
-            # If login returns False or raises an exception after retries
             raise RuntimeError("Login failed after multiple attempts. Cannot proceed.")
         stream_status_update("Login successful.")
 
         # --- Download Reports Loop ---
-        for i in range(len(report_types)):
-            report_type_key = report_types[i]
-            # Get corresponding dates and chunk size for this report
-            from_date = from_dates[i] if i < len(from_dates) else from_dates[-1]
-            to_date = to_dates[i] if i < len(to_dates) else to_dates[-1]
-            chunk_size_str = chunk_sizes[i] if i < len(chunk_sizes) else chunk_sizes[-1]
+        # Iterate through the list of report dictionaries
+        for report_info in reports_to_download:
+            report_type_key = report_info.get('report_type')
+            from_date = report_info.get('from_date')
+            to_date = report_info.get('to_date')
+            chunk_size_str = report_info.get('chunk_size', '5') # Default to '5' if missing
+
+            # Validate essential info for this report
+            if not all([report_type_key, from_date, to_date]):
+                 stream_status_update(f"Warning: Skipping report entry due to missing info: {report_info}")
+                 process_successful = False # Mark partial failure
+                 continue
 
             # Validate and parse chunk_size
-            chunk_size = 5 # Default chunk size in days
+            chunk_size = 5 # Default
             try:
                 if isinstance(chunk_size_str, str) and chunk_size_str.lower() == 'month':
-                    chunk_size = 'month' # Special value for monthly chunking
+                    chunk_size = 'month'
                 elif chunk_size_str:
                     chunk_size_days = int(chunk_size_str)
-                    if chunk_size_days <= 0:
-                        stream_status_update(f"Warning: Chunk size must be positive integer or 'month'. Using default 5 days for '{report_type_key}'.")
-                        chunk_size = 5
-                    else:
-                         chunk_size = chunk_size_days
-                else: # Empty string or None
-                    stream_status_update(f"Chunk size not provided for '{report_type_key}'. Using default: 5 days.")
-                    chunk_size = 5
-            except ValueError:
-                stream_status_update(f"Warning: Invalid chunk size '{chunk_size_str}' for '{report_type_key}'. Must be integer or 'month'. Using default: 5 days.")
+                    chunk_size = chunk_size_days if chunk_size_days > 0 else 5
+                # If chunk_size_str is empty or None, default 5 is kept
+            except (ValueError, TypeError):
+                stream_status_update(f"Warning: Invalid chunk size '{chunk_size_str}' for '{report_type_key}'. Using default: 5 days.")
                 chunk_size = 5
 
             # Get report URL
             report_url = link_report.get_report_url(report_type_key)
             if not report_url:
                 stream_status_update(f"Error: Could not find URL for report type '{report_type_key}'. Skipping.")
-                process_successful = False # Mark overall process as partially failed
-                continue # Skip to the next report
+                process_successful = False
+                continue
 
             stream_status_update(f"--- Starting download for report: {report_type_key} ---")
             stream_status_update(f"Date Range: {from_date} to {to_date}, Chunk Size/Mode: {chunk_size}")
 
-            report_failed = False # Flag for current report failure
+            report_failed = False
             try:
                 # --- Determine Download Method ---
-                # Check if region selection is required for this report URL
                 if report_url in config.REGION_REQUIRED_REPORT_URLS:
                     if not selected_regions_indices_str:
-                        stream_status_update(f"Error: Report '{report_type_key}' requires selecting one or more regions. Skipping.")
+                        stream_status_update(f"Error: Report '{report_type_key}' requires region selection, but none provided. Skipping.")
                         report_failed = True
                     else:
                         try:
-                            # Convert string indices to integers for the automation method
                             selected_regions_indices_int = [int(idx) for idx in selected_regions_indices_str]
                             region_names = [regions_data[i]['name'] for i in selected_regions_indices_int if i in regions_data]
                             stream_status_update(f"Downloading '{report_type_key}' for regions: {', '.join(region_names)}")
 
-                            # !!! IMPORTANT: Ensure 'download_reports_for_all_regions' exists and is updated
-                            # in logic_download.py to handle chunking and use safe_click/wait etc.
                             if hasattr(automation, 'download_reports_for_all_regions'):
+                                # Call the multi-region chunking method
                                 automation.download_reports_for_all_regions(
-                                    report_url, from_date, to_date, chunk_size, # Pass chunk size if needed
+                                    report_url, from_date, to_date, chunk_size,
                                     region_indices=selected_regions_indices_int,
                                     status_callback=stream_status_update
                                 )
                             else:
-                                 stream_status_update(f"ERROR: 'download_reports_for_all_regions' method not found in WebAutomation class.")
-                                 report_failed = True
-
+                                stream_status_update("ERROR: 'download_reports_for_all_regions' method missing.")
+                                report_failed = True
                         except (ValueError, TypeError, KeyError) as region_err:
                             stream_status_update(f"Error processing region indices for '{report_type_key}': {region_err}. Skipping.")
                             report_failed = True
-
-                # --- Report-Specific Logic (Example for FAF001) ---
-                elif report_type_key == "FAF001 - Sales Report":
-                    stream_status_update("Detected FAF001 - Using chunking download logic.")
-                    # !!! IMPORTANT: Ensure 'download_reports_in_chunks_1' exists and is updated
-                    # in logic_download.py to use safe_click, improved wait, etc.
-                    if hasattr(automation, 'download_reports_in_chunks_1'):
-                        automation.download_reports_in_chunks_1(
-                            report_url, from_date, to_date, chunk_size,
-                            status_callback=stream_status_update
-                        )
-                    else:
-                         stream_status_update(f"ERROR: 'download_reports_in_chunks_1' method not found in WebAutomation class.")
-                         report_failed = True
-
-                # --- Add similar elif blocks for other specific reports (FAF002, FAF003, FAF004N, FAF004X) ---
-                # Example:
-                # elif report_type_key == "FAF002 - Dosage Report":
-                #     if hasattr(automation, 'download_reports_in_chunks_2'):
-                #         automation.download_reports_in_chunks_2(...)
-                #     else: # Handle missing method
-                #         stream_status_update(f"ERROR: Method for {report_type_key} not found.")
-                #         report_failed = True
-
-                # --- Generic Download Logic ---
-                else:
+                # Report-specific chunking methods
+                elif report_type_key == "FAF001 - Sales Report" and hasattr(automation, 'download_reports_in_chunks_1'):
+                    automation.download_reports_in_chunks_1(report_url, from_date, to_date, chunk_size, stream_status_update)
+                elif report_type_key == "FAF004N - Internal Rotation Report (Imports)" and hasattr(automation, 'download_reports_in_chunks_4n'):
+                     automation.download_reports_in_chunks_4n(report_url, from_date, to_date, chunk_size, stream_status_update)
+                elif report_type_key == "FAF004X - Internal Rotation Report (Exports)" and hasattr(automation, 'download_reports_in_chunks_4x'):
+                     automation.download_reports_in_chunks_4x(report_url, from_date, to_date, chunk_size, stream_status_update)
+                # Add elif for other specific reports (2, 3, 5, 6, 28) mapped to generic or specific methods
+                elif report_type_key == "FAF002 - Dosage Report" and hasattr(automation, 'download_reports_in_chunks_2'):
+                     automation.download_reports_in_chunks_2(report_url, from_date, to_date, chunk_size, stream_status_update)
+                elif report_type_key == "FAF003 - Report Of Other Imports And Exports" and hasattr(automation, 'download_reports_in_chunks_3'):
+                     automation.download_reports_in_chunks_3(report_url, from_date, to_date, chunk_size, stream_status_update)
+                elif report_type_key == "FAF005 - Detailed Report Of Imports" and hasattr(automation, 'download_reports_in_chunks_5'):
+                     automation.download_reports_in_chunks_5(report_url, from_date, to_date, chunk_size, stream_status_update)
+                elif report_type_key == "FAF006 - Supplier Return Report" and hasattr(automation, 'download_reports_in_chunks_6'):
+                     automation.download_reports_in_chunks_6(report_url, from_date, to_date, chunk_size, stream_status_update)
+                elif report_type_key == "FAF028 - Detailed Import - Export Transaction Report" and hasattr(automation, 'download_reports_in_chunks_28'):
+                     automation.download_reports_in_chunks_28(report_url, from_date, to_date, chunk_size, stream_status_update)
+                # Generic fallback chunking method
+                elif hasattr(automation, 'download_reports_in_chunks'):
                     stream_status_update(f"Using generic chunking download logic for '{report_type_key}'.")
-                    # !!! IMPORTANT: Ensure 'download_reports_in_chunks' exists and is updated
-                    # in logic_download.py
-                    if hasattr(automation, 'download_reports_in_chunks'):
-                         automation.download_reports_in_chunks(
-                              report_url, from_date, to_date, chunk_size,
-                              status_callback=stream_status_update
-                         )
-                    else:
-                         stream_status_update(f"ERROR: Generic 'download_reports_in_chunks' method not found.")
-                         report_failed = True
+                    automation.download_reports_in_chunks(report_url, from_date, to_date, chunk_size, stream_status_update)
+                else:
+                    stream_status_update(f"ERROR: No suitable download method found for report type '{report_type_key}'. Skipping.")
+                    report_failed = True
 
-            # --- Catch Errors During Specific Report Download ---
-            # Catch WebDriverException first as it's more specific for automation errors
+            # --- Catch Errors During Report Download ---
+            except DownloadFailedException as report_err: # Specific download failure
+                 stream_status_update(f"ERROR downloading report {report_type_key}: {report_err}")
+                 report_failed = True
+                 # traceback.print_exc() # Optional: log traceback for specific failures too
             except WebDriverException as wd_err:
-                stream_status_update(f"ERROR (WebDriver) during download of {report_type_key}: {wd_err}")
-                report_failed = True
-                traceback.print_exc() # Log full traceback for debugging
-            # Catch custom exception if defined (e.g., for download failure after retries)
-            # except DownloadFailedException as report_err:
-            #     stream_status_update(f"ERROR downloading report {report_type_key}: {report_err}")
-            #     report_failed = True
-            #     traceback.print_exc()
-            except Exception as generic_err: # Catch any other unexpected errors
-                stream_status_update(f"FATAL ERROR during processing of {report_type_key}: {generic_err}")
-                report_failed = True
-                traceback.print_exc() # Crucial for debugging unexpected issues
+                 stream_status_update(f"ERROR (WebDriver) during download of {report_type_key}: {wd_err}")
+                 report_failed = True
+                 traceback.print_exc()
+                 # If session becomes invalid, stop processing further reports in this run
+                 if "invalid session id" in str(wd_err).lower():
+                     stream_status_update("FATAL: Session invalid. Stopping further report downloads for this run.")
+                     process_successful = False
+                     break # Exit the reports loop
+            except Exception as generic_err:
+                 stream_status_update(f"FATAL UNEXPECTED ERROR during processing of {report_type_key}: {generic_err}")
+                 report_failed = True
+                 traceback.print_exc()
+                 # Consider stopping for unexpected errors too
+                 # break
 
             # --- Report Completion Status ---
             if report_failed:
-                process_successful = False # Mark overall process as partially failed
+                process_successful = False # Mark overall process as failed
                 stream_status_update(f"--- Download FAILED for report: {report_type_key} ---")
             else:
                 stream_status_update(f"--- Download COMPLETED for report: {report_type_key} ---")
-
         # --- End of Reports Loop ---
 
     except (RuntimeError, ValueError, WebDriverException) as setup_err:
-        # Catch errors during setup (folder creation, init, login)
         error_message = f"A critical error occurred during setup or login: {setup_err}"
         stream_status_update(f"FATAL ERROR: {error_message}")
         traceback.print_exc()
-        process_successful = False # Mark entire process as failed
+        process_successful = False
     except Exception as e:
-        # Catch any other unexpected error in the main process flow
         error_message = f"An unexpected critical error occurred: {e}"
         stream_status_update(f"FATAL ERROR: {error_message}")
         traceback.print_exc()
@@ -323,174 +272,143 @@ def run_download_process(params):
         if automation:
             try:
                 stream_status_update("Attempting to close browser...")
-                automation.close() # Use the updated close method in WebAutomation
-                stream_status_update("Browser closed.")
+                automation.close()
+                # stream_status_update("Browser closed.") # Already logged in close()
             except Exception as close_e:
-                # Log critical error if browser closing fails
-                stream_status_update(f"CRITICAL ERROR: Failed to close browser session: {close_e}")
+                stream_status_update(f"CRITICAL ERROR: Failed to close browser session properly: {close_e}")
                 traceback.print_exc()
 
-        # --- Final Status Update ---
+        # --- Final Status ---
         final_message = "PROCESS FINISHED: "
-        if process_successful:
-            final_message += "All requested report downloads completed (check logs for individual status)."
+        final_message += "All requested reports attempted."
+        if not process_successful:
+             final_message += " One or more errors occurred. Please review logs and CSV file."
         else:
-            final_message += "One or more errors occurred during the process. Please review logs."
+             final_message += " Check logs and CSV file for individual report status."
         stream_status_update(f"--- {final_message} ---")
 
-        # Reset running state within lock
+        # Reset running state
         with lock:
             is_running = False
-
+            # download_thread = None # Optional: clear thread variable
 
 # --- Function Called by Scheduler ---
 def trigger_scheduled_download(config_name):
-    """
-    Loads a saved configuration and starts the download process in a new thread.
-    Executed by APScheduler jobs. Checks if another process is already running.
-    """
-    print(f"Scheduler attempting to trigger job for config: {config_name}")
-    # Avoid sending status updates from here directly to prevent potential mixing with manual runs
-    # stream_status_update(f"(Scheduler) Triggered download for config: {config_name}")
+    """Loads a saved configuration and starts the download process."""
+    print(f"Scheduler attempting job for config: {config_name}")
+    global is_running
 
-    global is_running # Need to check the global flag
-
-    with lock: # Ensure thread-safe check of is_running
+    with lock:
         if is_running:
             print(f"Scheduler: Download process already running. Skipping job for '{config_name}'.")
-            # stream_status_update(f"(Scheduler) Skipped job for '{config_name}': Process already running.") # Optional UI log
             return
-        # No need to set is_running=True here; run_download_process does it inside the lock
+        # No need to set is_running=True here; run_download_process does it
 
-    # Load the configuration outside the lock to minimize lock holding time
     configs = load_configs()
     params = configs.get(config_name)
 
     if not params:
-        print(f"Scheduler: Configuration '{config_name}' not found. Cannot start download.")
-        # stream_status_update(f"(Scheduler) Error: Configuration '{config_name}' not found.") # Optional UI log
+        print(f"Scheduler: Configuration '{config_name}' not found.")
         return
 
-    # --- Input validation for scheduled task parameters (basic) ---
-    # Add basic checks to ensure essential parameters exist in the loaded config
-    required_keys = ['email', 'password', 'report_type', 'from_date', 'to_date', 'chunk_size']
-    if not all(key in params for key in required_keys):
-         print(f"Scheduler: Configuration '{config_name}' is missing required parameters. Cannot start.")
-         # stream_status_update(f"(Scheduler) Error: Invalid config '{config_name}'.") # Optional UI log
+    # Validate essential keys in the loaded config structure
+    required_keys = ['email', 'password', 'reports'] # Regions is optional
+    if not all(key in params for key in required_keys) or not isinstance(params['reports'], list):
+         print(f"Scheduler: Config '{config_name}' missing required keys or 'reports' is not a list.")
          return
+    if not params['reports']: # Check if reports list is empty
+        print(f"Scheduler: Config '{config_name}' has no reports defined.")
+        return
 
-    # Start the download process in a new thread
     print(f"Scheduler: Starting download thread for config '{config_name}'...")
-    # Create a copy of the params to avoid potential modification issues
-    thread_params = params.copy()
-    scheduled_thread = threading.Thread(
-        target=run_download_process,
-        args=(thread_params,) # Pass the copied loaded params
-    )
-    scheduled_thread.daemon = True # Allow app to exit even if thread is running
+    thread_params = params.copy() # Pass a copy
+    scheduled_thread = threading.Thread(target=run_download_process, args=(thread_params,))
+    scheduled_thread.daemon = True
     scheduled_thread.start()
-
 
 # --- Flask Routes ---
 @app.route('/')
 def index():
-    """Render the main UI page (index.html)."""
-    # Pass default values from config (safer to use getenv defaults here)
+    """Render the main UI page."""
     return render_template('index.html',
                            default_email=config.DEFAULT_EMAIL,
-                           default_password=config.DEFAULT_PASSWORD) # Password will be empty if loaded from env var default
-
-# --- API Endpoints ---
+                           default_password=config.DEFAULT_PASSWORD)
 
 @app.route('/get-reports-regions', methods=['GET'])
 def get_reports_regions_data():
-    """Provide the list of reports, region info, and URLs requiring regions."""
+    """Provide report names, region info, and required URLs."""
     try:
-        report_url_map = link_report.get_report_url() # Get the dict
-        if not report_url_map:
-             report_names = []
-        else:
-             report_names = list(report_url_map.keys())
-
-        # Ensure regions_data is imported correctly
+        report_url_map = link_report.get_report_url()
+        report_names = list(report_url_map.keys()) if report_url_map else []
         regions_info = {idx: data['name'] for idx, data in regions_data.items()}
-
         return jsonify({
             'reports': report_names,
             'regions': regions_info,
             'region_required_urls': config.REGION_REQUIRED_REPORT_URLS,
-            'report_urls_map': report_url_map # Send the map for frontend logic
+            'report_urls_map': report_url_map
         })
     except Exception as e:
         print(f"Error in /get-reports-regions: {e}")
         traceback.print_exc()
         return jsonify({"status": "error", "message": "Could not load report/region data."}), 500
 
-
 @app.route('/start-download', methods=['POST'])
 def handle_start_download():
-    """Handles manual download request from the UI form."""
+    """Handles manual download request from the UI."""
     global is_running, download_thread
     print("\n--- Received request for /start-download ---")
 
-    with lock: # Check if already running
+    with lock:
         if is_running:
-            print("/start-download: Process already running. Returning error.")
-            return jsonify({'status': 'error', 'message': 'A download process is already running. Please wait.'}), 400
-        # Don't set is_running here; run_download_process does it securely
+            print("/start-download: Process already running.")
+            return jsonify({'status': 'error', 'message': 'A download process is already running. Please wait.'}), 409 # 409 Conflict
 
-    # --- Get and Validate Request Data ---
     try:
         data = request.get_json()
         if not data:
-            print("/start-download: No JSON data received.")
+            print("/start-download: No JSON data.")
             return jsonify({'status': 'error', 'message': 'Invalid request: No data received.'}), 400
-        print(f"/start-download: Received data: {json.dumps(data)}") # Log received data
+        print(f"/start-download: Received data: {json.dumps(data)}")
 
-        # --- Detailed Input Validation ---
+        # --- Backend Validation of received structure (matches script.js getCurrentFormData) ---
         errors = []
-        required_fields = ['email', 'password', 'report_type', 'from_date', 'to_date', 'chunk_size']
-        missing_fields = [field for field in required_fields if field not in data or not data[field]]
-        if missing_fields:
-            errors.append(f'Missing required information: {", ".join(missing_fields)}.')
+        if not data.get('email') or not data.get('password'):
+            errors.append('Missing email or password.')
+        # Check 'reports' list structure
+        reports_data = data.get('reports')
+        if not isinstance(reports_data, list) or not reports_data:
+            errors.append('Missing or invalid reports configuration (must be a non-empty list).')
+        else:
+            for i, report_entry in enumerate(reports_data):
+                if not isinstance(report_entry, dict):
+                    errors.append(f'Report entry {i+1} is not a valid object.')
+                    continue
+                if not report_entry.get('report_type'): errors.append(f'Missing report type for entry {i+1}.')
+                if not report_entry.get('from_date'): errors.append(f'Missing from_date for entry {i+1}.')
+                if not report_entry.get('to_date'): errors.append(f'Missing to_date for entry {i+1}.')
+                # Chunk size is optional, defaults handled later
 
-        report_types = data.get('report_type', [])
-        report_types = report_types if isinstance(report_types, list) else [report_types]
-        # Ensure at least one non-empty report type exists
-        if not any(rt for rt in report_types):
-             errors.append('Please select at least one report type.')
+        # Check 'regions' structure (must be list of strings if present)
+        regions_data = data.get('regions')
+        if regions_data is not None and not isinstance(regions_data, list):
+            errors.append('Invalid regions format (must be a list of strings).')
+        elif isinstance(regions_data, list):
+             if not all(isinstance(r, str) for r in regions_data):
+                 errors.append('Invalid regions format (list must contain strings).')
 
-        # Check list lengths match number of reports
-        num_reports = len(report_types)
-        list_fields_to_check = ['from_date', 'to_date', 'chunk_size']
-        for field in list_fields_to_check:
-            if not isinstance(data.get(field), list) or len(data.get(field, [])) != num_reports:
-                 errors.append(f'Data mismatch: Number of entries for "{field}" does not match number of selected reports ({num_reports}).')
-
-        # Region validation (only if regions are required by any selected report)
+        # Region requirement check (redundant with frontend check, but good practice)
         region_required_for_any = False
-        report_urls_map = link_report.get_report_url() # Get latest map
-        if report_urls_map: # Check if map was loaded
-            for report_type in report_types:
-                report_url = report_urls_map.get(report_type)
-                if report_url in config.REGION_REQUIRED_REPORT_URLS:
-                    region_required_for_any = True
-                    break
+        report_urls_map = link_report.get_report_url()
+        if report_urls_map and isinstance(reports_data, list):
+            for report_entry in reports_data:
+                 if isinstance(report_entry, dict):
+                     report_url = report_urls_map.get(report_entry.get('report_type'))
+                     if report_url in config.REGION_REQUIRED_REPORT_URLS:
+                         region_required_for_any = True
+                         break
+        if region_required_for_any and (not isinstance(regions_data, list) or not regions_data):
+             errors.append('One or more selected reports require region selection, but none were provided.')
 
-        if region_required_for_any:
-            regions_data_from_req = data.get('regions') # Should be list of strings
-            if not isinstance(regions_data_from_req, list):
-                 errors.append('Invalid region data format (must be a list).')
-            elif not regions_data_from_req: # Empty list when required
-                 errors.append('Please select at least one region for the required report(s).')
-            else:
-                 # Further check if values are valid indices (optional, depends on frontend)
-                 try:
-                      [int(r) for r in regions_data_from_req] # Try converting to int
-                 except (ValueError, TypeError):
-                      errors.append('Invalid region data (indices must be numbers).')
-
-        # --- If Validation Errors Found ---
         if errors:
             error_message = "Validation Failed: " + " ".join(errors)
             print(f"/start-download: {error_message}")
@@ -500,79 +418,84 @@ def handle_start_download():
         # --- End Validation ---
 
     except Exception as e:
-        print(f"/start-download: Error processing or validating request data: {e}")
+        print(f"/start-download: Error processing request data: {e}")
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': f'Error processing request data: {e}'}), 400
 
     # --- Start Background Thread ---
     try:
-        print("/start-download: Preparing to start download thread...")
-        # Create a copy of the data to pass to the thread
+        print("/start-download: Starting download thread...")
+        # Pass the validated data (which has the correct nested structure)
         thread_data = data.copy()
+        # Clear previous thread reference before starting new one
+        with lock:
+            download_thread = None # Clear old reference if any
         download_thread = threading.Thread(target=run_download_process, args=(thread_data,))
-        download_thread.daemon = True # Allow main app to exit even if thread is running
+        download_thread.daemon = True
         download_thread.start()
         print("/start-download: Download thread started successfully.")
-        # Return immediately to the client
         return jsonify({'status': 'started', 'message': 'Report download process initiated.'})
 
     except Exception as e:
         print(f"/start-download: Failed to start download thread: {e}")
         traceback.print_exc()
-        # Critical error if the thread cannot be started
+        # Reset running state if thread failed to start
+        with lock:
+            is_running = False
         return jsonify({'status': 'error', 'message': f'Internal Server Error: Failed to start download process ({e}).'}), 500
 
 
 @app.route('/stream-status')
 def stream_status_events():
-    """Server-Sent Events (SSE) endpoint for streaming status updates."""
+    """SSE endpoint for status updates."""
     def event_stream():
-        """Generator function for SSE."""
         last_yielded_index = 0
         keep_running = True
         try:
             while keep_running:
-                with lock: # Access shared state safely
+                with lock:
                     current_message_count = len(status_messages)
-                    is_process_running = is_running
-                    # Get only new messages since last yield
+                    is_process_active = is_running # Check state inside lock
                     messages_to_yield = status_messages[last_yielded_index:current_message_count]
 
-                # Yield new messages outside the lock
                 if messages_to_yield:
                     for message in messages_to_yield:
-                        # Format as SSE message
                         yield f"data: {message}\n\n"
-                    last_yielded_index = current_message_count # Update index *after* sending
+                    last_yielded_index = current_message_count
 
-                # Check finish condition *after* potentially yielding final messages
-                # If process is not running AND we have yielded all messages captured so far
-                if not is_process_running and last_yielded_index == current_message_count:
-                    # Add a small delay to ensure FINISHED is likely the very last message sent
+                # Check finish condition *after* yielding messages
+                if not is_process_active and last_yielded_index == current_message_count:
+                    # Small delay to ensure FINISHED is likely the last message
                     time.sleep(0.1)
-                    yield f"data: FINISHED\n\n"
-                    keep_running = False # Stop the loop
-                    break # Exit while loop
+                    # Verify again if status changed during sleep (unlikely but possible)
+                    with lock:
+                        final_process_check = is_running
+                        final_message_count = len(status_messages)
+                    # Only send FINISHED if process is *still* not running
+                    # and no new messages arrived during the brief sleep
+                    if not final_process_check and last_yielded_index == final_message_count:
+                        yield f"data: FINISHED\n\n"
+                        keep_running = False
+                        break # Exit while loop
+                    else:
+                        # Process restarted or new messages came in, continue loop
+                        pass
 
-                # Wait before checking again to avoid busy-waiting
-                time.sleep(0.5) # Poll every 0.5 seconds
+                # Wait before checking again
+                time.sleep(0.5)
 
         except GeneratorExit:
             print("SSE client disconnected.")
             keep_running = False
-        # except Exception as e: # Optional: log errors during streaming
-            # print(f"Error in SSE event stream: {e}")
-            # keep_running = False
         finally:
-            print("SSE stream closing.") # For server log
+            print("SSE stream closing.")
 
-    # Return a Response object with the generator and correct MIME type
     return Response(event_stream(), mimetype='text/event-stream')
 
 
 @app.route('/get-logs', methods=['GET'])
 def get_download_logs():
-    """Reads and returns the download log file content as JSON."""
+    """Reads and returns the download log file content."""
     logs_data = []
     status_code = 200
     response_status = 'success'
@@ -583,38 +506,24 @@ def get_download_logs():
         response_status = 'warning'
     else:
         try:
-            # Read CSV using Pandas, handle potential issues
-            df = pd.read_csv(
-                LOG_FILE_PATH,
-                dtype=str,           # Read all as strings initially
-                keep_default_na=False, # Don't interpret 'NA', 'NULL' etc. as NaN
-                na_values=[''],      # Treat empty strings as NA/None
-                on_bad_lines='warn'  # Warn about bad lines instead of erroring out
-            )
-
-            # Convert NaN/None back to empty strings for JSON consistency
-            df = df.fillna('')
+            # Use low_memory=False for potentially mixed types if needed
+            df = pd.read_csv(LOG_FILE_PATH, dtype=str, keep_default_na=False, na_values=[''], on_bad_lines='warn')
+            df = df.fillna('') # Replace any remaining NaN with empty string
             logs_data = df.to_dict('records')
 
-            # Sort by Timestamp descending if column exists
             if 'Timestamp' in df.columns and not df.empty:
                 try:
-                    # Attempt to parse timestamp, coerce errors to NaT (Not a Time)
                     df['TimestampParsed'] = pd.to_datetime(df['Timestamp'], errors='coerce')
-                    # Sort by valid timestamps, keeping original order for invalid ones by handling NaT
-                    # NaT values will typically sort first or last depending on na_position
                     df_sorted = df.sort_values(by='TimestampParsed', ascending=False, na_position='last')
-                    # Convert sorted data back, dropping the temporary parsed column
                     logs_data = df_sorted.drop(columns=['TimestampParsed']).to_dict('records')
                 except Exception as sort_err:
-                    print(f"Could not sort logs by timestamp: {sort_err}")
-                    # Use unsorted data if sorting fails
+                   print(f"Could not sort logs by timestamp: {sort_err}")
 
             if not logs_data:
                 message = 'Log file is empty.'
-
         except pd.errors.EmptyDataError:
             message = 'Log file is empty.'
+            response_status = 'warning' # Empty is not an error
         except Exception as e:
             print(f"Error reading or processing log file: {e}")
             traceback.print_exc()
@@ -627,7 +536,7 @@ def get_download_logs():
 # --- Configuration Endpoints ---
 @app.route('/get-configs', methods=['GET'])
 def get_configs():
-    """Gets the list of saved configuration names."""
+    """Gets saved configuration names."""
     configs = load_configs()
     return jsonify({'status': 'success', 'configs': list(configs.keys())})
 
@@ -636,37 +545,35 @@ def save_config():
     """Saves or updates a named configuration."""
     try:
         data = request.get_json()
-        if not data:
-             return jsonify({'status': 'error', 'message': 'Invalid request: No data.'}), 400
+        if not data: return jsonify({'status': 'error', 'message': 'Invalid request: No data.'}), 400
 
         config_name = data.get('config_name')
-        config_data = data.get('config_data') # This contains email, pass, reports, regions etc.
+        # config_data should have the structure from getCurrentFormData
+        config_data = data.get('config_data')
 
         if not config_name or not config_data:
             return jsonify({'status': 'error', 'message': 'Missing configuration name or data.'}), 400
 
-        # Basic validation of config_data structure (add more checks as needed)
+        # Validate the structure being saved (matches expected run structure)
         if not isinstance(config_data.get('reports'), list):
-             return jsonify({'status': 'error', 'message': 'Invalid configuration data structure (missing reports list).'}), 400
-        # SECURITY NOTE: Password is saved here if present in config_data
+             return jsonify({'status': 'error', 'message': 'Invalid config data: "reports" must be a list.'}), 400
         if 'password' in config_data and config_data['password']:
-             print(f"WARNING: Saving configuration '{config_name}' which includes a password.")
+             print(f"WARNING: Saving config '{config_name}' which includes a password.")
 
         configs = load_configs()
         configs[config_name] = config_data
-        save_configs(configs) # Uses lock internally
+        save_configs(configs)
 
         return jsonify({'status': 'success', 'message': f'Configuration "{config_name}" saved.'})
 
     except Exception as e:
-         print(f"Error saving config: {e}")
-         traceback.print_exc()
-         return jsonify({'status': 'error', 'message': f'Internal error saving configuration: {e}'}), 500
-
+        print(f"Error saving config: {e}")
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': f'Internal error saving configuration: {e}'}), 500
 
 @app.route('/load-config/<config_name>', methods=['GET'])
 def load_config(config_name):
-    """Loads the details of a specific configuration."""
+    """Loads details of a specific configuration."""
     configs = load_configs()
     config_data = configs.get(config_name)
     if config_data:
@@ -679,105 +586,78 @@ def delete_config(config_name):
     """Deletes a saved configuration."""
     configs = load_configs()
     if config_name in configs:
-        del configs[config_name] # Correct way to delete item from dict
-        save_configs(configs) # Save the modified dictionary (uses lock)
+        del configs[config_name]
+        save_configs(configs)
         return jsonify({'status': 'success', 'message': f'Configuration "{config_name}" deleted.'})
     else:
-        return jsonify({'status': 'error', 'message': f'Configuration "{config_name}" not found for deletion.'}), 404
+        return jsonify({'status': 'error', 'message': f'Configuration "{config_name}" not found.'}), 404
 
 # --- Scheduling API Endpoints ---
-
 @app.route('/schedule-job', methods=['POST'])
 def schedule_job():
-    """Schedules a new download job based on a saved configuration."""
+    """Schedules a new download job."""
     try:
         data = request.get_json()
-        if not data:
-            return jsonify({'status': 'error', 'message': 'Invalid request: No data.'}), 400
+        if not data: return jsonify({'status': 'error', 'message': 'Invalid request: No data.'}), 400
 
         config_name = data.get('config_name')
-        # trigger_type = data.get('trigger_type', 'date') # Currently only 'date' is fully supported
-        run_datetime_str = data.get('run_datetime') # Expected format: YYYY-MM-DDTHH:MM
+        run_datetime_str = data.get('run_datetime')
 
         print(f"Received schedule request: config='{config_name}', datetime='{run_datetime_str}'")
 
-        if not config_name:
-            return jsonify({'status': 'error', 'message': 'Configuration name is required.'}), 400
-        if not run_datetime_str:
-            return jsonify({'status': 'error', 'message': 'Run date/time is required.'}), 400
+        if not config_name: return jsonify({'status': 'error', 'message': 'Configuration name required.'}), 400
+        if not run_datetime_str: return jsonify({'status': 'error', 'message': 'Run date/time required.'}), 400
 
-        # Validate config exists
         configs = load_configs()
         if config_name not in configs:
-            return jsonify({'status': 'error', 'message': f'Configuration "{config_name}" not found.'}), 404
+             return jsonify({'status': 'error', 'message': f'Configuration "{config_name}" not found.'}), 404
 
-        # Generate a unique job ID
-        job_id = f"sched_{config_name.replace(' ','_')}_{int(time.time())}"
+        job_id = f"sched_{config_name.replace(' ','_').lower()}_{int(time.time())}"
 
-        # Parse and validate the run datetime
         try:
-            # Parse the naive datetime string from input (e.g., "2025-04-17T10:00")
             run_datetime_naive = datetime.fromisoformat(run_datetime_str)
-
-            # Ensure the scheduled time is in the future (compare naive times, assumes server and input context are similar enough)
-            # Add a small buffer (e.g., 60 seconds) to prevent scheduling in the immediate past
+            # Schedule based on UTC time
             if run_datetime_naive <= datetime.now() + timedelta(seconds=60):
-                return jsonify({'status': 'error', 'message': 'Scheduled time must be at least 1 minute in the future.'}), 400
-
-            # APScheduler with timezone='utc' will interpret this naive datetime as UTC
+                return jsonify({'status': 'error', 'message': 'Scheduled time must be > 1 min in the future.'}), 400
+            # APScheduler interprets naive datetime as belonging to its configured timezone (UTC)
             trigger = DateTrigger(run_date=run_datetime_naive)
-            print(f"Scheduling job {job_id} with DateTrigger for naive datetime {run_datetime_naive} (interpreted as UTC by scheduler)")
-
         except ValueError:
-             return jsonify({'status': 'error', 'message': 'Invalid date/time format. Use YYYY-MM-DDTHH:MM.'}), 400
+             return jsonify({'status': 'error', 'message': 'Invalid date/time format (YYYY-MM-DDTHH:MM).'}), 400
 
-
-        # Add the job to the scheduler within a lock for thread safety
-        with lock:
+        with lock: # Protect scheduler access
             scheduler.add_job(
-                func=trigger_scheduled_download,
-                trigger=trigger,
-                args=[config_name], # Pass config name as argument to the target function
-                id=job_id,
-                name=f"Download: {config_name}", # Job name for easier identification in logs/UI
-                replace_existing=False, # Don't replace if ID somehow collides (shouldn't with timestamp)
-                misfire_grace_time=600 # Allow job to run up to 10 minutes late if scheduler was down
+                func=trigger_scheduled_download, trigger=trigger, args=[config_name],
+                id=job_id, name=f"Download: {config_name}", replace_existing=False,
+                misfire_grace_time=600 # Allow 10 mins late run
             )
         print(f"Successfully added job {job_id} to scheduler.")
-        return jsonify({'status': 'success', 'message': f'Job scheduled successfully for config "{config_name}".', 'job_id': job_id})
+        return jsonify({'status': 'success', 'message': f'Job scheduled for config "{config_name}".', 'job_id': job_id})
 
     except Exception as e:
         print(f"Error scheduling job: {e}")
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': f'Failed to schedule job: {e}'}), 500
 
-
 @app.route('/get-schedules', methods=['GET'])
 def get_schedules():
     """Gets the list of currently scheduled jobs."""
     jobs_info = []
     try:
-        # Access scheduler state within a lock
-        with lock:
+        with lock: # Protect scheduler access
             jobs = scheduler.get_jobs()
             for job in jobs:
-                # Format next run time safely (should be timezone-aware from scheduler)
                 next_run_iso = None
                 if job.next_run_time:
-                    try:
-                        # Ensure it's interpreted correctly (already UTC due to scheduler config)
-                        # Format as ISO string with timezone info
+                    try: # next_run_time is timezone-aware (UTC)
                         next_run_iso = job.next_run_time.isoformat()
                     except Exception as fmt_e:
                         print(f"Error formatting next_run_time for job {job.id}: {fmt_e}")
                         next_run_iso = str(job.next_run_time) # Fallback
-
                 jobs_info.append({
-                    'id': job.id,
-                    'name': job.name,
-                    'next_run_time': next_run_iso, # Send ISO string to frontend
+                    'id': job.id, 'name': job.name,
+                    'next_run_time': next_run_iso,
                     'trigger': str(job.trigger),
-                    'args': job.args # Should contain the config_name
+                    'args': job.args # Contains config_name
                 })
         return jsonify({'status': 'success', 'schedules': jobs_info})
     except Exception as e:
@@ -785,82 +665,62 @@ def get_schedules():
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': f'Failed to get schedules: {e}'}), 500
 
-
 @app.route('/cancel-schedule/<job_id>', methods=['DELETE'])
 def cancel_schedule(job_id):
-    """Cancels (removes) a scheduled job by its ID."""
+    """Cancels (removes) a scheduled job."""
     print(f"Received request to cancel job: {job_id}")
     try:
-        # Modify scheduler state within a lock
-        with lock:
+        with lock: # Protect scheduler access
             scheduler.remove_job(job_id)
         print(f"Removed job {job_id} from scheduler.")
-        # Return success even if job was already gone (idempotent delete)
-        return jsonify({'status': 'success', 'message': f'Job "{job_id}" cancelled successfully.'})
+        return jsonify({'status': 'success', 'message': f'Job "{job_id}" cancelled.'})
     except JobLookupError:
-        # Job doesn't exist (might have already run or been cancelled)
-        print(f"Job {job_id} not found for cancellation (already finished or removed).")
-        # Still return success as the desired state (job gone) is achieved
-        return jsonify({'status': 'success', 'message': f'Job "{job_id}" not found or already completed/cancelled.'})
+        print(f"Job {job_id} not found for cancellation.")
+        # Return success as the job is gone (idempotent)
+        return jsonify({'status': 'success', 'message': f'Job "{job_id}" not found (already run or cancelled).'})
     except Exception as e:
         print(f"Error cancelling job {job_id}: {e}")
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': f'Failed to cancel job "{job_id}": {e}'}), 500
 
-
 # --- Main Execution ---
 if __name__ == '__main__':
-    # --- Initial Setup ---
-    # Ensure base download directory exists
+    # Initial Setup
     try:
         os.makedirs(config.DOWNLOAD_BASE_PATH, exist_ok=True)
     except OSError as e:
         print(f"CRITICAL ERROR: Could not create base download directory '{config.DOWNLOAD_BASE_PATH}': {e}")
-        # Consider exiting if the base path cannot be created
-        exit(1) # Exit if base download path fails
-
-    # Ensure configuration file exists (create empty if not)
+        exit(1)
     if not os.path.exists(CONFIG_FILE_PATH):
         print(f"Configuration file not found at {CONFIG_FILE_PATH}. Creating empty file.")
-        save_configs({}) # Create empty config file
+        save_configs({})
 
-    # --- Start Scheduler ---
-    # Check if scheduler is not already running (e.g., due to Flask reloader)
+    # Start Scheduler
     if not scheduler.running:
         try:
-            # If using SQLAlchemyJobStore, ensure DB schema is created if needed
-            # Example:
-            # if isinstance(scheduler.get_jobstore('default'), SQLAlchemyJobStore):
-            #     # from sqlalchemy import create_engine
-            #     # engine = create_engine('sqlite:///jobs.sqlite')
-            #     # You might need to initialize tables here if not done automatically
-            #     pass
-            scheduler.start()
+            scheduler.start(paused=False) # Start immediately
             print("APScheduler started successfully.")
-            # Register shutdown hook for graceful scheduler shutdown
             atexit.register(lambda: scheduler.shutdown())
             print("Registered APScheduler shutdown hook.")
         except Exception as e:
             print(f"CRITICAL ERROR: Failed to start APScheduler: {e}")
             traceback.print_exc()
-            # Decide if the app should continue without the scheduler
-            # For this app, scheduling is a core feature, consider exiting.
-            # exit(1) # Optionally exit if scheduler fails
+            # exit(1) # Exit if scheduler is critical
 
-    # --- Run Flask Application ---
+    # Run Flask App
     print("Starting Flask application...")
     HOST = '127.0.0.1'
     PORT = 5000
-    # Use Waitress for a more production-ready server if available
+    # Use Waitress if available for better performance/stability than dev server
     try:
-        from waitress import serve # type: ignore
-        print(f"Running with Waitress WSGI server on http://{HOST}:{PORT} (Channel Timeout={3600}s)...")
-        serve(app, host=HOST, port=PORT, threads=8, connection_limit=200, channel_timeout=3600)
+        from waitress import serve
+        print(f"Running with Waitress WSGI server on http://{HOST}:{PORT}")
+        # Adjust threads, connection_limit, channel_timeout as needed
+        serve(app, host=HOST, port=PORT, threads=10, channel_timeout=1800) # 30 min channel timeout
     except ImportError:
         print("\n--- WARNING ---")
-        print("Waitress WSGI server not found. Install with: pip install waitress")
-        print("Falling back to Flask's built-in development server.")
-        print("Flask's development server is NOT suitable for production environments.")
+        print("Waitress not found (pip install waitress). Using Flask's development server.")
+        print("Flask's development server is NOT suitable for production.")
         print("---------------\n")
-        # Run with debug=False and use_reloader=False for stability with APScheduler
+        # Run dev server with reloader disabled for APScheduler stability
         app.run(debug=False, host=HOST, port=PORT, threaded=True, use_reloader=False)
