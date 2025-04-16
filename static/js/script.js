@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Global Variables ---
     let reportDataCache = null; // Cache for report/region data (URLs, names, requirements)
     let sseConnection = null; // Holds the active Server-Sent Events connection
+    let eventSource = null; // Holds the EventSource connection
 
     // --- Helper Functions ---
 
@@ -367,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Check backend response status
             if (result && result.status === 'started') {
                 addStatusMessage("Request accepted. Waiting for status updates...");
-                initializeSSEListener(); // Start listening for updates
+                setupEventSource(); // Start listening for updates
             } else {
                 // Error message should have been shown by fetchData
                 downloadButton.disabled = false;
@@ -381,24 +382,33 @@ document.addEventListener('DOMContentLoaded', () => {
      }
 
     /** Initializes the Server-Sent Events (SSE) connection for status updates. */
-    function initializeSSEListener() {
-        if (sseConnection) { // Close existing connection if any
-             sseConnection.close();
+    function setupEventSource() {
+        if (eventSource) {
+            eventSource.close();
         }
-        sseConnection = new EventSource('/stream-status'); // Connect to the SSE endpoint
 
-        sseConnection.onopen = function() {
-             console.log("SSE connection established.");
-             addStatusMessage("Connected to status stream...");
-         };
+        eventSource = new EventSource('/stream-status');
+        
+        // Tăng timeout cho EventSource connection
+        const keepAliveTimeout = 3600000; // 1 hour
+        let lastEventTime = Date.now();
+        
+        const keepAliveTimer = setInterval(() => {
+            if (Date.now() - lastEventTime > keepAliveTimeout) {
+                console.log('SSE connection timeout. Reconnecting...');
+                eventSource.close();
+                setupEventSource(); // Reconnect
+            }
+        }, 30000); // Check every 30 seconds
 
-        sseConnection.onmessage = function(event) {
+        eventSource.onmessage = function(event) {
+            lastEventTime = Date.now(); // Update last event time
             const message = event.data;
             // Check for the special FINISHED signal
             if (message === "FINISHED") {
                 addStatusMessage("--- PROCESS COMPLETED ---", false, true);
-                if (sseConnection) sseConnection.close(); // Close connection
-                sseConnection = null; // Reset variable
+                if (eventSource) eventSource.close(); // Close connection
+                eventSource = null; // Reset variable
                 downloadButton.disabled = false; // Re-enable button
                 loadingIndicator.style.display = 'none';
                 fetchLogs(); // Refresh logs automatically when finished
@@ -407,13 +417,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        sseConnection.onerror = function(error) {
+        eventSource.onerror = function(error) {
             console.error('SSE Error:', error);
-            addStatusMessage("Status stream connection error. Please check console or try again.", true);
-            if (sseConnection) sseConnection.close(); // Close on error
-            sseConnection = null; // Reset variable
-            downloadButton.disabled = false; // Re-enable button
-            loadingIndicator.style.display = 'none';
+            setTimeout(() => {
+                console.log('Attempting to reconnect...');
+                setupEventSource();
+            }, 5000); // Wait 5 seconds before reconnecting
         };
     }
 

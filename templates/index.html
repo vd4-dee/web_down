@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi"> <head>
+<html lang="en"> <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Report Downloader</title>
@@ -238,11 +238,11 @@
                         <td><input type="date" name="from_date[]" required></td>
                         <td><input type="date" name="to_date[]" required></td>
                         <td><input type="text" name="chunk_size[]" value="5" placeholder="E.g.: 5 or month"></td>
-                        <td><button type="button" class="remove-row-button" title="Remove this report row">Xóa</button></td>
+                        <td><button type="button" class="remove-row-button" title="Remove this report row">Remove</button></td>
                     </tr>
                 </tbody>
             </table>
-            <button type="button" id="add-row-button" title="Add another report row">Thêm Báo cáo</button>
+            <button type="button" id="add-row-button" title="Add another report row">Add Report</button>
             <br><br>
 
             <div id="region-selection" style="display: none;">
@@ -250,7 +250,7 @@
                 </div>
             <br>
 
-            <button type="submit" id="download-button">Download All Now</button>
+            <button type="submit" id="download-button">Download All</button>
             <span id="loading-indicator" style="display: none;">Processing...</span>
         </form>
     </div>

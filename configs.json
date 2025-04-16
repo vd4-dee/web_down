@@ -85,5 +85,60 @@
             }
         ],
         "regions": []
+    },
+    "tet": {
+        "email": "khangvd4",
+        "password": "toiGHEThack@123",
+        "reports": [
+            {
+                "report_type": "FAF006 - Supplier Return Report",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "month"
+            },
+            {
+                "report_type": "FAF001 - Sales Report",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "5"
+            },
+            {
+                "report_type": "FAF003 - Report Of Other Imports And Exports",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "month"
+            },
+            {
+                "report_type": "FAF004N - Internal Rotation Report (Imports)",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "5"
+            },
+            {
+                "report_type": "FAF004X - Internal Rotation Report (Exports)",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "5"
+            },
+            {
+                "report_type": "FAF005 - Detailed Report Of Imports",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "month"
+            },
+            {
+                "report_type": "FAF006 - Supplier Return Report",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "month"
+            },
+            {
+                "report_type": "FAF028 - Detailed Import - Export Transaction Report",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "5"
+            }
+        ],
+        "regions": []
     }
 }
