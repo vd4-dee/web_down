@@ -1,11 +1,10 @@
+#Import libary and function
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import UnexpectedAlertPresentException, TimeoutException, NoSuchElementException, ElementClickInterceptedException # Thêm các exception cụ thể
-from webdriver_manager.chrome import ChromeDriverManager
-import urllib3
+from selenium.common.exceptions import UnexpectedAlertPresentException, TimeoutException
 import os
 import time
 import pyotp # type: ignore
@@ -18,7 +17,6 @@ import shutil
 import link_report
 import calendar
 import csv
-import traceback
 
 # Định nghĩa lại từ điển vùng với tên khác, chẳng hạn regions_data
 regions_data = {
@@ -47,12 +45,7 @@ class WebAutomation:
         self.download_folder = download_folder
         
         chrome_options = webdriver.ChromeOptions()
-        prefs = {
-            'download.default_directory': self.download_folder,
-            'download.prompt_for_download': False,
-            'download.directory_upgrade': True,
-            'safebrowsing.enabled': True
-        }
+        prefs = {'download.default_directory': self.download_folder}
         chrome_options.add_experimental_option('prefs', prefs)
 
         # Thêm các tùy chọn khởi động để tăng thời gian chờ của ChromeDriver
@@ -64,16 +57,15 @@ class WebAutomation:
         chrome_options.add_argument('--disable-features=VizDisplayCompositor')
         chrome_options.add_argument('--enable-automation')
         chrome_options.add_argument('--disable-infobars')
+        #chrome_options.add_argument('--headless=new')
+        #chrome_options.add_argument('--headless')  # Run headless to improve performance
+        #chrome_options.page_load_strategy = 'eager'  # Load page with minimal resources
 
         self.service = Service(self.driver_path)
         self.driver = webdriver.Chrome(service=self.service, options=chrome_options)
-        
-        # Thiết lập thời gian chờ tải trang và các thao tác
-        self.driver.set_page_load_timeout(300)  # 5 phút cho tải trang
-        self.driver.implicitly_wait(60)  # 60 giây cho implicit wait
-        self.wait = WebDriverWait(self.driver, 180)  # 3 phút cho explicit wait
-        
-        # Khởi tạo danh sách files ban đầu
+         # Thiết lập thời gian chờ tải trang
+        self.driver.set_page_load_timeout(100000)
+        self.wait = WebDriverWait(self.driver, 60)
         self.before_download = self.get_files_in_folder()
 
     def get_files_in_folder(self):
@@ -663,125 +655,62 @@ class WebAutomation:
             print("TimeoutException:", te)
 
 
-    def download_report_001(self, report_url , from_date, to_date, status_callback=None): # Thêm status_callback
-        if status_callback: status_callback(f"Entering download_report_001 for {from_date} to {to_date}")
+    # Use with report id = 001
+    def download_report_001(self, report_url , from_date, to_date):
         self.driver.get(report_url)
-        log_file_name = ""
-        log_status = "Failed"
-        log_error = ""
         try:
-            if status_callback: status_callback("Waiting for page to load...")
             self.wait.until(lambda driver: driver.execute_script('return document.readyState') == 'complete')
-
-            if status_callback: status_callback("Selecting report type radio button...")
             radio_button = self.wait.until(EC.element_to_be_clickable((By.ID, 'ctl00_MainContent_rblType_1')))
-            radio_button.click()
+            radio_button.click()            
 
-            if status_callback: status_callback(f"Setting 'To Date': {to_date}")
             edate = self.wait.until(EC.element_to_be_clickable((By.ID, 'ctl00_MainContent_cbo_toDate_dateInput')))
             edate.clear()
             edate.send_keys(format_date_ddmmyyyy(to_date))
 
-            if status_callback: status_callback(f"Setting 'From Date': {from_date}")
             sdate = self.wait.until(EC.element_to_be_clickable((By.ID, 'ctl00_MainContent_cbo_fromDate_dateInput')))
             sdate.clear()
             sdate.send_keys(format_date_ddmmyyyy(from_date))
 
-            if status_callback: status_callback("Clicking download button...")
             download_button = self.wait.until(EC.element_to_be_clickable((By.ID, 'ctl00_MainContent_btnExportCSVDemo_input')))
-            # Kiểm tra trạng thái button trước khi click nếu cần debug
-            # print("Download button enabled:", download_button.is_enabled())
-            # print("Download button displayed:", download_button.is_displayed())
-
-            # Xử lý alert trước khi click nếu có
+            # Kiểm tra trạng thái button trước khi click
+            print("Download button enabled:", download_button.is_enabled())
+            print("Download button displayed:", download_button.is_displayed())
+            # Bắt alert trước khi click nếu có
             try:
                 alert = self.driver.switch_to.alert
-                alert_text = alert.text
-                if status_callback: status_callback(f"Alert detected before click: {alert_text}")
+                print("Alert before click:", alert.text)
                 alert.accept()
             except Exception:
-                pass # Không có alert
-
+                pass
             download_button.click()
-            if status_callback: status_callback("Download button clicked.")
-
-            # Xử lý alert sau khi click nếu có
+            # Bắt alert sau khi click nếu có
             try:
-                # Chờ một chút để alert có thể xuất hiện
-                time.sleep(1)
                 alert = self.driver.switch_to.alert
-                alert_text = alert.text
-                if status_callback: status_callback(f"Alert detected after click: {alert_text}")
+                print("Alert after click:", alert.text)
                 alert.accept()
             except Exception:
-                pass # Không có alert
+                pass
 
-            if status_callback: status_callback("Waiting for download to complete...")
-            # Pass callback xuống wait_for_download_to_finish
-            download_finished = self.wait_for_download_to_finish(status_callback=status_callback)
+            self.wait_for_download_to_finish()
+            self.extract_zip_files()
 
-            if download_finished:
-                 if status_callback: status_callback("Extracting zip files (if any)...")
-                 self.extract_zip_files(status_callback=status_callback) # Giữ nguyên việc giải nén
-
-                 # Kiểm tra lại file sau khi giải nén (nếu cần)
-                 after_download = self.get_files_in_folder()
-                 new_files = [f for f in after_download if f not in self.before_download and not f.endswith('.crdownload')]
-
-                 if new_files:
-                     # Lấy tên file mới nhất (thường là file được giải nén)
-                     latest_file = max(new_files, key=lambda f: os.path.getmtime(os.path.join(self.download_folder, f)))
-                     log_file_name = latest_file # Ghi nhận tên file đã xử lý
-                     log_status = "Success"
-                     if status_callback: status_callback(f"Successfully processed download for {from_date} to {to_date}. File: {log_file_name}")
-                     self.before_download = after_download # Cập nhật trạng thái file
-                 else:
-                     log_error = "Download finished but no new non-temporary file detected after extraction."
-                     if status_callback: status_callback(f"WARNING: {log_error}")
-                     # Vẫn cập nhật before_download để tránh lỗi ở lần sau
-                     self.before_download = self.get_files_in_folder()
-
-            else:
-                # wait_for_download_to_finish trả về False hoặc raise TimeoutException
-                log_error = "wait_for_download_to_finish indicated failure or timed out."
-                if status_callback: status_callback(f"ERROR: {log_error}")
-
+            after_download = self.get_files_in_folder()
+            new_files = [f for f in after_download if f not in self.before_download]
+            if new_files:
+                print("The new file has been downloaded:", new_files[0])
+                self.before_download = after_download  # Cập nhật danh sách before_download
 
         except UnexpectedAlertPresentException as e:
-            log_status = "Failed"
-            try:
-                alert = self.driver.switch_to.alert
-                log_error = f"Alert Present: {alert.text}"
-                if status_callback: status_callback(f"ERROR: {log_error}")
-                alert.accept()
-            except Exception as accept_err:
-                 log_error += f" | Error accepting alert: {accept_err}"
-                 if status_callback: status_callback(f"ERROR accepting alert: {accept_err}")
+            alert = self.driver.switch_to.alert
+            print(f"Alert Text: {alert.text}")
+            alert.accept()
+            print("Close the alert and try again.")
 
         except TimeoutException as te:
-            log_status = "Failed"
-            log_error = f"Timeout Error during report 001 download steps: {te}"
-            if status_callback: status_callback(f"ERROR: {log_error}")
-            # In traceback chi tiết hơn
-            # traceback.print_exc()
-
-        except (NoSuchElementException, ElementClickInterceptedException) as se:
-            log_status = "Failed"
-            log_error = f"Selenium Element Error in download_report_001: {se.__class__.__name__} - {se}"
-            if status_callback: status_callback(f"ERROR: {log_error}")
-            # traceback.print_exc()
+            print("TimeoutException:", te)
 
         except Exception as e:
-            log_status = "Failed"
-            log_error = f"General Error in download_report_001: {e.__class__.__name__} - {e}"
-            if status_callback: status_callback(f"ERROR: {log_error}")
-            # traceback.print_exc()
-        finally:
-            # --- THÊM LOG NGAY TRƯỚC KHI THOÁT HÀM ---
-            if status_callback: status_callback(f"Exiting download_report_001 for {from_date} to {to_date}. Status: {log_status}, File: {log_file_name}, Error: {log_error}")
-            # Ghi log vào CSV (đã có sẵn trong download_report, nhưng có thể thêm ở đây nếu cần)
-            # log_data = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), from_date, to_date, log_status, log_file_name, log_error]
-            # WebAutomation.write_log_to_csv(log_data)
+            print(f"General Error in download_report_001: {e}")
 
     # Use with report id = 004N
     def download_report_004N(self, report_url, from_date, to_date):
@@ -916,60 +845,22 @@ class WebAutomation:
             if status_callback: status_callback(f"Error during page refresh: {e}")
 
     def download_reports_in_chunks_1(self, report_url, start_date, end_date, chunk_size, status_callback=None):
-        if status_callback: status_callback(f"Splitting date range {start_date} to {end_date} for report 001.")
         date_ranges = self.split_date_range(start_date, end_date, chunk_size)
-        total_chunks = len(date_ranges)
         if date_ranges:
-            for i, (from_date, to_date) in enumerate(date_ranges):
-                chunk_num = i + 1
+            for from_date, to_date in date_ranges:
                 if status_callback:
-                    status_callback(f"--- Starting Chunk {chunk_num}/{total_chunks} (FAF001): {from_date} to {to_date} ---")
-
-                try:
-                    # Gọi hàm download_report_001 và truyền status_callback
-                    self.download_report_001(report_url, from_date, to_date, status_callback=status_callback)
-
-                    # --- BỎ DÒNG GÂY LỖI TIMEOUT ---
-                    # self.wait.until(lambda driver: driver.execute_script('return document.readyState') == 'complete')
-                    # --- THAY BẰNG MỘT PAUSE NGẮN NẾU CẦN ---
-                    if status_callback: status_callback("Pausing briefly before refresh...")
-                    time.sleep(3) # Chờ 3 giây
-
-                    if status_callback: status_callback("Refreshing page...")
-                    self.driver.refresh()
-                    # Chờ refresh hoàn tất (có thể thêm wait nếu refresh lâu)
-                    # Ví dụ: Chờ một element chắc chắn có mặt sau khi refresh
-                    try:
-                        self.wait.until(EC.presence_of_element_located((By.ID, 'ctl00_MainContent_cbo_fromDate_dateInput'))) # Chờ ô fromDate xuất hiện lại
-                        if status_callback: status_callback("Page refreshed successfully.")
-                    except TimeoutException:
-                         if status_callback: status_callback("WARNING: Page refresh took too long or failed to verify.")
-
-                    if status_callback:
-                        status_callback(f"--- Completed Chunk {chunk_num}/{total_chunks} (FAF001) ---")
-
-                except Exception as e:
-                    # Ghi nhận lỗi xảy ra trong chunk này
-                    error_msg = f"ERROR in Chunk {chunk_num}/{total_chunks} (FAF001 - {from_date} to {to_date}): {e.__class__.__name__} - {e}"
-                    if status_callback:
-                        status_callback(error_msg)
-                    # Ghi log lỗi nghiêm trọng vào CSV
-                    log_data = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), from_date, to_date, "Failed in Chunk", "", error_msg]
-                    WebAutomation.write_log_to_csv(log_data)
-                    # In traceback để debug
-                    # traceback.print_exc()
-                    # Quyết định: Tiếp tục chunk tiếp theo hay dừng lại? (Hiện tại đang tiếp tục)
-                    if status_callback: status_callback(f"Attempting to continue with the next chunk despite error.")
-
-
-            if status_callback:
-                status_callback(f"Finished processing all {total_chunks} chunks for FAF001.")
+                    status_callback(f"Download the report from {from_date} to {to_date}")
+                else:
+                    print(f"Download the report from {from_date} to {to_date}")
+                self.download_report_001(report_url, from_date, to_date)
+                self.wait.until(lambda driver: driver.execute_script('return document.readyState') == 'complete')
+                self.driver.refresh()
+                self.wait.until(lambda driver: driver.execute_script('return document.readyState') == 'complete')
         else:
-            message = f"Could not split date range {start_date} to {end_date} for report 001."
             if status_callback:
-                status_callback(f"WARNING: {message}")
+                status_callback("Could not find a valid date range to download the report.")
             else:
-                print(message)
+                print("Could not find a valid date range to download the report.")
 
     def download_reports_in_chunks_2(self, report_url, start_date, end_date, chunk_size, status_callback=None):
         date_ranges = self.split_date_range(start_date, end_date, chunk_size)
@@ -1117,8 +1008,7 @@ class WebAutomation:
     
 
     def close(self):
-        if self.driver:
-            self.driver.quit()
+        self.driver.quit()
 
 class Functionality:
     def __init__(self, folder_path):

@@ -1,0 +1,270 @@
+# app.py
+from flask import Flask, render_template, request, jsonify, Response
+import threading
+import time
+import csv
+import os
+import pyotp
+from datetime import datetime
+import pandas as pd # Using pandas for easier CSV reading
+import math
+import config
+from logic_download import WebAutomation, regions_data # Ensure regions_data is importable
+import link_report
+
+app = Flask(__name__)
+
+# Global variables for state management (simple; might need refinement for concurrent users)
+status_messages = []
+is_running = False
+download_thread = None
+
+# --- Utility Functions ---
+def stream_status_update(message):
+    """Sends status messages to the client via SSE."""
+    global status_messages
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    full_message = f"{timestamp}: {message}"
+    print(full_message) # Log to backend console for debugging
+    status_messages.append(full_message)
+    # The SSE mechanism will pick this up
+
+def run_download_process(params):
+    global is_running, status_messages
+    is_running = True
+    status_messages = [] # Clear previous logs on new run
+    stream_status_update("Starting report download process...")
+
+    email = params['email']
+    password = params['password']
+    report_types = params['report_type'] if isinstance(params['report_type'], list) else [params['report_type']]
+    from_dates = params['from_date'] if isinstance(params['from_date'], list) else [params['from_date']]
+    to_dates = params['to_date'] if isinstance(params['to_date'], list) else [params['to_date']]
+    chunk_sizes = params['chunk_size'] if isinstance(params['chunk_size'], list) else [params['chunk_size']]
+    selected_regions_indices = params.get('regions', [])
+
+    automation = None
+    try:
+        stream_status_update(f"Preparing download folder in: {config.DOWNLOAD_BASE_PATH}")
+        download_folder = WebAutomation.create_download_folder(config.DOWNLOAD_BASE_PATH)
+        stream_status_update(f"Download folder created: {download_folder}")
+        stream_status_update("Initializing browser automation...")
+        automation = WebAutomation(config.DRIVER_PATH, download_folder)
+        stream_status_update(f"Logging in with user: {email}...")
+        otp = pyotp.TOTP(config.OTP_SECRET).now()
+        # Đăng nhập 1 lần đầu tiên
+        first_report_url = link_report.get_report_url(report_types[0])
+        automation.login(first_report_url, email, password, otp, status_callback=stream_status_update)
+        stream_status_update("Login successful.")
+
+        for i in range(len(report_types)):
+            report_type_key = report_types[i]
+            from_date = from_dates[i] if i < len(from_dates) else from_dates[0]
+            to_date = to_dates[i] if i < len(to_dates) else to_dates[0]
+            chunk_size_str = chunk_sizes[i] if i < len(chunk_sizes) else chunk_sizes[0]
+            try:
+                if isinstance(chunk_size_str, str) and chunk_size_str.lower() == 'month':
+                    chunk_size = 'month'
+                elif chunk_size_str:
+                    chunk_size = int(chunk_size_str)
+                    if chunk_size <= 0:
+                        stream_status_update("Error: Chunk size must be a positive integer or 'month'. Using default: 5.")
+                        chunk_size = 5
+                else:
+                    stream_status_update("Chunk size not provided. Using default: 5.")
+                    chunk_size = 5
+            except ValueError:
+                stream_status_update(f"Error: Invalid chunk size '{chunk_size_str}'. Must be integer or 'month'. Using default: 5.")
+                chunk_size = 5
+
+            report_url = link_report.get_report_url(report_type_key)
+            if not report_url:
+                stream_status_update(f"Error: Could not find URL for report type '{report_type_key}'")
+                continue
+
+            stream_status_update(f"Preparing to download report: {report_type_key}")
+            stream_status_update(f"Date Range: {from_date} to {to_date}, Chunk Size: {chunk_size}")
+
+            if report_url in config.REGION_REQUIRED_REPORT_URLS:
+                if not selected_regions_indices:
+                    stream_status_update("Error: This report requires selecting one or more regions.")
+                    continue
+                region_names = [regions_data[i]['name'] for i in selected_regions_indices if i in regions_data]
+                stream_status_update(f"Downloading for regions: {', '.join(region_names)}")
+                automation.download_reports_for_all_regions(
+                    report_url, from_date, to_date,
+                    region_indices=selected_regions_indices,
+                    status_callback=stream_status_update
+                )
+            elif report_type_key == "FAF001 - Sales Report":
+                stream_status_update("Detected FAF001 - Using specific download logic.")
+                automation.download_reports_in_chunks_1(
+                    report_url, from_date, to_date, chunk_size,
+                    status_callback=stream_status_update
+                )
+            elif report_type_key == "FAF004N - Internal Rotation Report (Imports)":
+                stream_status_update("Detected FAF004N - Using specific download logic.")
+                automation.download_reports_in_chunks_4n(
+                    report_url, from_date, to_date, chunk_size,
+                    status_callback=stream_status_update
+                )
+            elif report_type_key == "FAF004X - Internal Rotation Report (Exports)":
+                stream_status_update("Detected FAF004X - Using specific download logic.")
+                automation.download_reports_in_chunks_4x(
+                    report_url, from_date, to_date, chunk_size,
+                    status_callback=stream_status_update
+                )
+            else:
+                stream_status_update("Using generic download logic.")
+                automation.download_reports_in_chunks(
+                    report_url, from_date, to_date, chunk_size,
+                    status_callback=stream_status_update
+                )
+            stream_status_update(f"Completed download for report: {report_type_key}")
+
+        stream_status_update("All report downloads completed.")
+    except Exception as e:
+        error_message = f"An error occurred: {e}"
+        stream_status_update(f"FATAL ERROR: {error_message}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        if automation:
+            stream_status_update("Closing browser...")
+            automation.close()
+            stream_status_update("Browser closed.")
+        is_running = False
+        stream_status_update("--- PROCESS FINISHED ---")
+
+# --- Routes (API Endpoints) ---
+@app.route('/')
+def index():
+    """Render the main user interface page."""
+    return render_template('index.html',
+                           default_email=config.DEFAULT_EMAIL,
+                           default_password=config.DEFAULT_PASSWORD)
+
+@app.route('/get-reports-regions', methods=['GET'])
+def get_reports_regions_data():
+    """Provide the list of reports and region information."""
+    report_names = list(link_report.get_report_url().keys())
+    # Format region data for easier use in JS
+    regions_info = {idx: data['name'] for idx, data in regions_data.items()}
+    return jsonify({
+        'reports': report_names,
+        'regions': regions_info,
+        'region_required_urls': config.REGION_REQUIRED_REPORT_URLS, # Send URLs requiring regions
+        'report_urls_map': link_report.get_report_url() # Send map: report_key -> url
+    })
+
+@app.route('/start-download', methods=['POST'])
+def handle_start_download():
+    global is_running, download_thread
+    if is_running:
+        return jsonify({'status': 'error', 'message': 'A download process is already running. Please wait.'}), 400
+
+    data = request.json
+    required_fields = ['email', 'password', 'report_type', 'from_date', 'to_date', 'chunk_size']
+    if not all(field in data for field in required_fields):
+        return jsonify({'status': 'error', 'message': 'Missing required information.'}), 400
+
+    # Fix: Always treat report_type as a list for validation
+    report_types = data['report_type'] if isinstance(data['report_type'], list) else [data['report_type']]
+
+    # Check if region selection is required and provided (for any report in the list)
+    region_required = False
+    for report_type in report_types:
+        report_url = link_report.get_report_url(report_type)
+        if report_url in config.REGION_REQUIRED_REPORT_URLS:
+            region_required = True
+            break
+
+    if region_required:
+        if 'regions' not in data or not data['regions']:
+            return jsonify({'status': 'error', 'message': 'This report requires region selection.'}), 400
+        try:
+            data['regions'] = [int(r) for r in data['regions']]
+        except (ValueError, TypeError):
+            return jsonify({'status': 'error', 'message': 'Invalid region data received.'}), 400
+    else:
+        data['regions'] = []
+
+    # Start the background thread
+    stream_status_update("Received download request. Starting background process...")
+    download_thread = threading.Thread(target=run_download_process, args=(data,))
+    download_thread.daemon = True
+    download_thread.start()
+
+    return jsonify({'status': 'started', 'message': 'Report download process initiated.'})
+
+@app.route('/stream-status')
+def stream_status_events():
+    """Server-Sent Events (SSE) endpoint for status updates."""
+    def event_stream():
+        last_yielded_index = 0
+        try:
+            while True:
+                # Yield new messages since last check
+                current_messages_count = len(status_messages)
+                if current_messages_count > last_yielded_index:
+                    for i in range(last_yielded_index, current_messages_count):
+                        yield f"data: {status_messages[i]}\n\n"
+                    last_yielded_index = current_messages_count
+
+                # If process finished and all messages sent, signal end and break
+                if not is_running and last_yielded_index == len(status_messages):
+                    yield f"data: FINISHED\n\n" # Signal to client
+                    break
+
+                time.sleep(1) # Wait before checking for new messages again
+        except GeneratorExit:
+            print("SSE client disconnected.")
+        finally:
+            print("SSE stream closing.")
+    return Response(event_stream(), mimetype='text/event-stream')
+    # Important: Set the mimetype to text/event-stream for SSE
+
+@app.route('/get-logs', methods=['GET'])
+def get_download_logs():
+    """Read and return the content of the download_log.csv file."""
+    import math
+    log_file_path = os.path.join(os.path.dirname(__file__), 'download_log.csv')
+    if not os.path.exists(log_file_path):
+        return jsonify({'status': 'warning', 'message': 'Log file does not exist yet.', 'logs': []}), 200 # Return empty list
+
+    try:
+        # Use pandas to read CSV, handles headers well
+        df = pd.read_csv(log_file_path, dtype=str, keep_default_na=False, na_values=[''])
+        # Convert DataFrame to list of dictionaries (JSON records format)
+        logs_data = df.to_dict('records')
+        # Clean logs_data: loại bỏ giá trị NaN, None, ...
+        for row in logs_data:
+            for key, value in row.items():
+                if value is None or value == 'nan' or value == 'NaN':
+                    row[key] = ''
+        # Optional: sort by Timestamp if exists
+        if 'Timestamp' in df.columns:
+            try:
+                df['Timestamp'] = pd.to_datetime(df['Timestamp'], errors='coerce')
+                logs_data = df.sort_values(by='Timestamp', ascending=False).to_dict('records')
+            except Exception:
+                pass # Keep original order if sorting fails
+
+        return jsonify({'status': 'success', 'logs': logs_data})
+    except pd.errors.EmptyDataError:
+         return jsonify({'status': 'success', 'message': 'Log file is empty.', 'logs': []}), 200
+    except Exception as e:
+        msg = str(e)
+        if msg is None or msg.lower() == 'nan':
+            msg = ''
+        # Nếu vẫn còn NaN trong chuỗi message, thay thế tất cả
+        msg = msg.replace('NaN', '').replace('nan', '')
+        return jsonify({'status': 'error', 'message': msg, 'logs': []}), 500
+    
+if __name__ == '__main__':
+    # Create the base download directory if it doesn't exist
+    os.makedirs(config.DOWNLOAD_BASE_PATH, exist_ok=True)
+    # Run the Flask development server
+    # debug=True is helpful for development but should be False in production
+    # threaded=True is necessary for handling SSE and background tasks concurrently
+    app.run(debug=True, host='127.0.0.1', port=5000, threaded=True)

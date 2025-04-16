@@ -1,24 +1,224 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
+<html lang="vi"> <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Report Downloader</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 15px;
+            background-color: #f0f2f5;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        label {
+            margin-right: 5px;
+            display: inline-block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"],
+        input[type="password"],
+        input[type="date"],
+        input[type="datetime-local"],
+        input[type="number"],
+        select {
+            margin-right: 10px;
+            padding: 8px; /* Increased padding */
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+            min-width: 150px; /* Minimum width for inputs/selects */
+        }
+        button {
+            padding: 8px 15px; /* Increased padding */
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            margin-left: 5px;
+            vertical-align: middle;
+            font-size: 0.95em;
+            transition: background-color 0.2s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .delete-button {
+             background-color: #dc3545;
+        }
+        .delete-button:hover {
+             background-color: #c82333;
+        }
+        #config-management, #scheduling, #control-panel, #status-panel, #log-panel {
+            margin-top: 20px;
+            padding: 20px; /* Increased padding */
+            border: 1px solid #d1d9e6; /* Softer border */
+            border-radius: 8px;
+            background-color: #ffffff; /* White background */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow */
+        }
+        #config-management h2, #scheduling h2, #control-panel h2, #status-panel h2, #log-panel h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            color: #0056b3; /* Header color */
+        }
+        #report-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        #report-table th, #report-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        #report-table th {
+            background-color: #e9ecef; /* Header background */
+            color: #495057;
+        }
+        #report-table td select, #report-table td input {
+            width: 95%; /* Make inputs fill cell */
+            box-sizing: border-box;
+        }
+        #report-table .remove-row-button {
+            background-color: #ffc107;
+            color: #333;
+        }
+        #report-table .remove-row-button:hover {
+            background-color: #e0a800;
+        }
+        #add-row-button {
+            background-color: #28a745;
+        }
+        #add-row-button:hover {
+            background-color: #218838;
+        }
+        #status-messages {
+            height: 200px;
+            overflow-y: scroll;
+            border: 1px solid #eee;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        #log-table-container {
+             max-height: 300px;
+             overflow-y: auto;
+             border: 1px solid #eee;
+             border-radius: 4px;
+        }
+        .log-table { /* Style for the generated log table */
+             width: 100%;
+             border-collapse: collapse;
+        }
+        .log-table th, .log-table td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: left;
+            font-size: 0.9em;
+        }
+        .log-table th {
+             background-color: #f2f2f2;
+        }
+        #schedules-list {
+            list-style: none;
+            padding: 0;
+            margin-top: 10px;
+        }
+         #schedules-list li {
+            margin-bottom: 8px;
+            padding: 10px; /* Increased padding */
+            border: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #fff;
+            border-radius: 4px;
+         }
+         #schedules-list li span {
+             margin-right: 10px;
+             flex-grow: 1;
+         }
+         #region-selection {
+             margin-top: 15px; /* Increased margin */
+             padding: 15px; /* Increased padding */
+             border: 1px dashed #aed6f1; /* Dashed border */
+             display: none; /* Hidden by default */
+             border-radius: 4px;
+             background-color: #eaf2f8; /* Light blue background */
+         }
+         #region-selection label { /* Style for the main label */
+             font-weight: bold;
+             color: #154360;
+             margin-bottom: 10px;
+         }
+         /* Style for individual checkbox labels */
+         #region-selection label[for^="region-"] {
+             display: inline-block; /* Keep inline */
+             margin-right: 15px;
+             font-weight: normal; /* Normal weight */
+             color: #333; /* Reset color */
+         }
+         #region-selection input[type="checkbox"] {
+             margin-right: 5px;
+             vertical-align: middle;
+         }
+         .schedule-info {
+            font-size: 0.9em;
+            color: #555;
+         }
+         #loading-indicator {
+             margin-left: 10px;
+             font-style: italic;
+             color: #0056b3;
+         }
+
+    </style>
 </head>
 <body>
     <h1>Report Downloader</h1>
 
+    <div id="config-management">
+        <h2>Configuration Management</h2>
+        <div>
+            <label for="config-name">Configuration Name:</label>
+            <input type="text" id="config-name" placeholder="E.g., Monthly Reports">
+            <button id="save-config-button" title="Save the current settings below as a new configuration">Save Current Config</button>
+        </div>
+        <div style="margin-top: 10px;">
+            <label for="saved-configs-dropdown">Load/Delete Config:</label>
+            <select id="saved-configs-dropdown">
+                <option value="">-- Select Configuration --</option>
+                </select>
+            <button id="load-config-button" title="Load the selected configuration into the form below">Load</button>
+            <button id="delete-config-button" class="delete-button" title="Delete the selected configuration">Delete</button>
+        </div>
+    </div>
+
     <div id="control-panel">
         <h2>Download Configuration</h2>
         <form id="download-form">
-            <label for="email">Email:</label>
-            <input type="text" id="email" name="email" value="{{ default_email or '' }}" required><br>
-
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" value="{{ default_password or '' }}" required><br>
-
-            <table id="report-table">
+            <div><label for="email">Email:</label>
+                <input type="text" id="email" name="email" value="{{ default_email or '' }}" required>
+            </div>
+            <div>
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" value="{{ default_password or '' }}" required>
+            </div>
+            <hr style="margin: 15px 0;"> <table id="report-table">
                 <thead>
                     <tr>
                         <th>Report Name</th>
@@ -31,17 +231,26 @@
                 <tbody>
                     <tr>
                         <td>
-                            <select name="report_type[]" required></select>
+                            <select name="report_type[]" class="report-type-select" required>
+                                <option value="">-- Loading Reports --</option>
+                            </select>
                         </td>
                         <td><input type="date" name="from_date[]" required></td>
                         <td><input type="date" name="to_date[]" required></td>
                         <td><input type="text" name="chunk_size[]" value="5" placeholder="E.g.: 5 or month"></td>
-                        <td><button type="button" class="remove-row-button">Remove</button></td>
+                        <td><button type="button" class="remove-row-button" title="Remove this report row">Xóa</button></td>
                     </tr>
                 </tbody>
             </table>
-            <button type="button" id="add-row-button">Add Report</button><br><br>
-            <button type="submit" id="download-button">Download All</button>
+            <button type="button" id="add-row-button" title="Add another report row">Thêm Báo cáo</button>
+            <br><br>
+
+            <div id="region-selection" style="display: none;">
+                <label>Select Region(s) (for required reports):</label><br>
+                </div>
+            <br>
+
+            <button type="submit" id="download-button">Download All Now</button>
             <span id="loading-indicator" style="display: none;">Processing...</span>
         </form>
     </div>
@@ -49,59 +258,36 @@
     <div id="status-panel">
         <h2>Progress Status</h2>
         <div id="status-messages">
-            <p>No activity yet.</p>
+            <p>No activity yet.</p> </div>
+    </div>
+
+    <div id="scheduling">
+        <h2>Schedule Download</h2>
+        <div>
+            <label for="schedule-config-select">Select Config:</label>
+            <select id="schedule-config-select">
+                <option value="">-- Select Saved Config --</option>
+                </select>
         </div>
+        <div>
+            <label for="schedule-datetime">Run At (Date & Time):</label>
+            <input type="datetime-local" id="schedule-datetime">
+        </div>
+        <div>
+            <button id="schedule-button" title="Schedule the selected configuration to run once at the specified time">Schedule Job</button>
+        </div>
+
+        <h3 style="margin-top: 15px;">Active Schedules:</h3>
+        <ul id="schedules-list">
+            <li>Loading schedules...</li> </ul>
     </div>
 
     <div id="log-panel">
-        <h2>Download History (Log) <button id="refresh-log-button">Refresh Log</button></h2>
+        <h2>Download History (Log) <button id="refresh-log-button" title="Refresh the download history below">Refresh Log</button></h2>
         <div id="log-table-container">
-            <p>No log data available.</p>
-        </div>
+            <p>No log data available.</p> </div>
     </div>
 
-    <script>
-        // Set default dates for the first row
-        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        firstDayOfMonth.setHours(firstDayOfMonth.getHours() + 7);
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-
-        document.querySelectorAll("input[name='from_date[]']").forEach(input => input.valueAsDate = firstDayOfMonth);
-        document.querySelectorAll("input[name='to_date[]']").forEach(input => input.valueAsDate = yesterday);
-
-        // Add new row functionality
-        document.getElementById("add-row-button").addEventListener("click", function () {
-            const tableBody = document.querySelector("#report-table tbody");
-            const newRow = document.createElement("tr");
-            newRow.innerHTML = `
-                <td>
-                    <select name="report_type[]" required>
-                        <option value="">-- Choose --</option>
-                        <!-- Add report options dynamically -->
-                    </select>
-                </td>
-                <td><input type="date" name="from_date[]" required></td>
-                <td><input type="date" name="to_date[]" required></td>
-                <td><input type="text" name="chunk_size[]" value="5" placeholder="E.g.: 5 or month"></td>
-                <td><button type="button" class="remove-row-button">Remove</button></td>
-            `;
-            tableBody.appendChild(newRow);
-
-            // Set default dates for the new row
-            newRow.querySelector("input[name='from_date[]']").valueAsDate = firstDayOfMonth;
-            newRow.querySelector("input[name='to_date[]']").valueAsDate = yesterday;
-        });
-
-        // Remove row functionality
-        document.getElementById("report-table").addEventListener("click", function (event) {
-            if (event.target.classList.contains("remove-row-button")) {
-                const row = event.target.closest("tr");
-                row.remove();
-            }
-        });
-    </script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>

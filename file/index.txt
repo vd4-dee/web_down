@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Downloader</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h1>Report Downloader</h1>
+
+    <div id="control-panel">
+        <h2>Download Configuration</h2>
+        <form id="download-form">
+            <label for="email">Email:</label>
+            <input type="text" id="email" name="email" value="{{ default_email or '' }}" required><br>
+
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" value="{{ default_password or '' }}" required><br>
+
+            <table id="report-table">
+                <thead>
+                    <tr>
+                        <th>Report Name</th>
+                        <th>From Date</th>
+                        <th>To Date</th>
+                        <th>Chunk Size</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <select name="report_type[]" required></select>
+                        </td>
+                        <td><input type="date" name="from_date[]" required></td>
+                        <td><input type="date" name="to_date[]" required></td>
+                        <td><input type="text" name="chunk_size[]" value="5" placeholder="E.g.: 5 or month"></td>
+                        <td><button type="button" class="remove-row-button">Remove</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button type="button" id="add-row-button">Add Report</button><br><br>
+            <button type="submit" id="download-button">Download All</button>
+            <span id="loading-indicator" style="display: none;">Processing...</span>
+        </form>
+    </div>
+
+    <div id="status-panel">
+        <h2>Progress Status</h2>
+        <div id="status-messages">
+            <p>No activity yet.</p>
+        </div>
+    </div>
+
+    <div id="log-panel">
+        <h2>Download History (Log) <button id="refresh-log-button">Refresh Log</button></h2>
+        <div id="log-table-container">
+            <p>No log data available.</p>
+        </div>
+    </div>
+
+    <script>
+        // Set default dates for the first row
+        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        firstDayOfMonth.setHours(firstDayOfMonth.getHours() + 7);
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+
+        // document.querySelectorAll("input[name='from_date[]']").forEach(input => input.valueAsDate = firstDayOfMonth);
+        // document.querySelectorAll("input[name='to_date[]']").forEach(input => input.valueAsDate = yesterday);
+        document.querySelectorAll("input[name='from_date[]']").forEach(input => {
+            input.value = firstDayOfMonth.toISOString().slice(0, 10); // yyyy-mm-dd
+        });
+        document.querySelectorAll("input[name='to_date[]']").forEach(input => {
+            input.value = yesterday.toISOString().slice(0, 10); // yyyy-mm-dd
+        });
+        // Add new row functionality
+        document.getElementById("add-row-button").addEventListener("click", function () {
+            const tableBody = document.querySelector("#report-table tbody");
+            const newRow = document.createElement("tr");
+            newRow.innerHTML = `
+                <td>
+                    <select name="report_type[]" required></select>
+                </td>
+                <td><input type="date" name="from_date[]" required></td>
+                <td><input type="date" name="to_date[]" required></td>
+                <td><input type="text" name="chunk_size[]" value="5" placeholder="E.g.: 5 or month"></td>
+                <td><button type="button" class="remove-row-button">Remove</button></td>
+            `;
+            tableBody.appendChild(newRow);
+
+            // Set default dates for the new row
+            newRow.querySelector("input[name='from_date[]']").value = firstDayOfMonth.toISOString().slice(0, 10);
+            newRow.querySelector("input[name='to_date[]']").value = yesterday.toISOString().slice(0, 10);
+
+            // Lấy danh sách report name từ dropdown đầu tiên (nếu đã có)
+            const firstSelect = document.querySelector("select[name='report_type[]']");
+            const newSelect = newRow.querySelector("select[name='report_type[]']");
+            if (firstSelect && newSelect) {
+                newSelect.innerHTML = firstSelect.innerHTML;
+            }
+        });
+
+        // Remove row functionality
+        document.getElementById("report-table").addEventListener("click", function (event) {
+            if (event.target.classList.contains("remove-row-button")) {
+                const row = event.target.closest("tr");
+                row.remove();
+            }
+        });
+    </script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
