@@ -188,115 +188,176 @@
              font-style: italic;
              color: #0056b3;
          }
-
+         .section-content {
+             display: none;
+         }
     </style>
 </head>
 <body>
     <h1>Report Downloader</h1>
 
-    <div id="config-management">
-        <h2>Configuration Management</h2>
-        <div>
-            <label for="config-name">Configuration Name:</label>
-            <input type="text" id="config-name" placeholder="E.g., Monthly Reports">
-            <button id="save-config-button" title="Save the current settings below as a new configuration">Save Current Config</button>
+    <!-- Advanced Settings Toggle -->
+    <div id="advanced-toggle-container" style="margin: 10px 0;">
+        <button type="button" id="toggle-advanced-settings" title="Show/Hide advanced settings">
+            <i class="fa fa-cog"></i> Advanced Settings <i class="fa fa-chevron-down toggle-icon"></i>
+        </button>
+    </div>
+    <div id="advanced-settings" style="display: none; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #fff; margin-bottom:20px;">
+        <div style="margin-bottom: 10px;">
+            <label for="otp-secret">OTP Secret:</label>
+            <input type="text" id="otp-secret" name="otp_secret" value="{{ default_otp_secret or '' }}">
         </div>
-        <div style="margin-top: 10px;">
-            <label for="saved-configs-dropdown">Load/Delete Config:</label>
-            <select id="saved-configs-dropdown">
-                <option value="">-- Select Configuration --</option>
+        <div style="margin-bottom: 10px;">
+            <label for="driver-path">ChromeDriver Path:</label>
+            <input type="text" id="driver-path" name="driver_path" value="{{ default_driver_path or '' }}">
+        </div>
+        <div>
+            <label for="download-base-path">Download Base Path:</label>
+            <input type="text" id="download-base-path" name="download_base_path" value="{{ default_download_base_path or '' }}">
+        </div>
+    </div>
+
+    <div id="config-management">
+        <h2>
+            Configuration Management
+            <button type="button" class="toggle-section" data-target="config-management-content" title="Show/Hide">
+                <i class="fa fa-chevron-down toggle-icon"></i>
+            </button>
+        </h2>
+        <div id="config-management-content" class="section-content">
+            <div>
+                <label for="config-name">Configuration Name:</label>
+                <input type="text" id="config-name" placeholder="E.g., Monthly Reports">
+                <button id="save-config-button" title="Save the current settings below as a new configuration">Save Current Config</button>
+            </div>
+            <div style="margin-top: 10px;">
+                <label for="saved-configs-dropdown">Load/Delete Config:</label>
+                <select id="saved-configs-dropdown">
+                    <option value="">-- Select Configuration --</option>
                 </select>
-            <button id="load-config-button" title="Load the selected configuration into the form below">Load</button>
-            <button id="delete-config-button" class="delete-button" title="Delete the selected configuration">Delete</button>
+                <button id="load-config-button" title="Load the selected configuration into the form below">Load</button>
+                <button id="delete-config-button" class="delete-button" title="Delete the selected configuration">Delete</button>
+            </div>
         </div>
     </div>
 
     <div id="control-panel">
-        <h2>Download Configuration</h2>
-        <form id="download-form">
-            <div><label for="email">Email:</label>
-                <input type="text" id="email" name="email" value="{{ default_email or '' }}" required>
-            </div>
-            <div>
-                <label for="password">Password:</label>
-                <input type="password" id="password" name="password" value="{{ default_password or '' }}" required>
-            </div>
-            <hr style="margin: 15px 0;"> <table id="report-table">
-                <thead>
-                    <tr>
-                        <th>Report Name</th>
-                        <th>From Date</th>
-                        <th>To Date</th>
-                        <th>Chunk Size</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>
-                            <select name="report_type[]" class="report-type-select" required>
-                                <option value="">-- Loading Reports --</option>
-                            </select>
-                        </td>
-                        <td><input type="date" name="from_date[]" required></td>
-                        <td><input type="date" name="to_date[]" required></td>
-                        <td><input type="text" name="chunk_size[]" value="5" placeholder="E.g.: 5 or month"></td>
-                        <td><button type="button" class="remove-row-button" title="Remove this report row">Remove</button></td>
-                    </tr>
-                </tbody>
-            </table>
-            <button type="button" id="add-row-button" title="Add another report row">Add Report</button>
-            <br><br>
-
-            <div id="region-selection" style="display: none;">
-                <label>Select Region(s) (for required reports):</label><br>
+        <h2>
+            Download Configuration
+            <button type="button" class="toggle-section" data-target="control-panel-content" title="Show/Hide">
+                <i class="fa fa-chevron-down toggle-icon"></i>
+            </button>
+        </h2>
+        <div id="control-panel-content" class="section-content">
+            <form id="download-form">
+                <div><label for="email">Email:</label>
+                    <input type="text" id="email" name="email" value="{{ default_email or '' }}" required>
                 </div>
-            <br>
+                <div>
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" value="{{ default_password or '' }}" required>
+                </div>
+                <hr style="margin: 15px 0;"> 
+                <table id="report-table">
+                    <thead>
+                        <tr>
+                            <th>Report Name</th>
+                            <th>From Date</th>
+                            <th>To Date</th>
+                            <th>Chunk Size</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <select name="report_type[]" class="report-type-select" required>
+                                    <option value="">-- Loading Reports --</option>
+                                </select>
+                            </td>
+                            <td><input type="date" name="from_date[]" required></td>
+                            <td><input type="date" name="to_date[]" required></td>
+                            <td><input type="text" name="chunk_size[]" value="5" placeholder="E.g.: 5 or month"></td>
+                            <td><button type="button" class="remove-row-button" title="Remove this report row">Remove</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button type="button" id="add-row-button" title="Add another report row">Add Report</button>
+                <br><br>
 
-            <button type="submit" id="download-button">Download All</button>
-            <span id="loading-indicator" style="display: none;">Processing...</span>
-        </form>
+                <div id="region-selection" style="display: none;">
+                    <label>Select Region(s) (for required reports):</label><br>
+                </div>
+                <br>
+
+                <button type="submit" id="download-button">Download All</button>
+                <span id="loading-indicator" style="display: none;">Processing...</span>
+            </form>
+        </div>
     </div>
 
     <div id="status-panel">
-        <h2>Progress Status</h2>
-        <div id="status-messages">
-            <p>No activity yet.</p> </div>
+        <h2>
+            Progress Status
+            <button type="button" class="toggle-section" data-target="status-panel-content" title="Show/Hide">
+                <i class="fa fa-chevron-down toggle-icon"></i>
+            </button>
+        </h2>
+        <div id="status-panel-content" class="section-content">
+            <div id="status-messages">
+                <p>No activity yet.</p> 
+            </div>
+        </div>
     </div>
 
     <div id="scheduling">
-        <h2>Schedule Download</h2>
-        <div>
-            <label for="schedule-config-select">Select Config:</label>
-            <select id="schedule-config-select">
-                <option value="">-- Select Saved Config --</option>
+        <h2>
+            Schedule Download
+            <button type="button" class="toggle-section" data-target="scheduling-content" title="Show/Hide">
+                <i class="fa fa-chevron-down toggle-icon"></i>
+            </button>
+        </h2>
+        <div id="scheduling-content" class="section-content">
+            <div>
+                <label for="schedule-config-select">Select Config:</label>
+                <select id="schedule-config-select">
+                    <option value="">-- Select Saved Config --</option>
                 </select>
-        </div>
-        <div>
-            <label for="schedule-datetime">Run At (Date & Time):</label>
-            <input type="datetime-local" id="schedule-datetime">
-        </div>
-        <div>
-            <button id="schedule-button" title="Schedule the selected configuration to run once at the specified time">Schedule Job</button>
-        </div>
+            </div>
+            <div>
+                <label for="schedule-datetime">Run At (Date & Time):</label>
+                <input type="datetime-local" id="schedule-datetime">
+            </div>
+            <div>
+                <button id="schedule-button" title="Schedule the selected configuration to run once at the specified time">Schedule Job</button>
+            </div>
 
-        <h3 style="margin-top: 15px;">Active Schedules:</h3>
-        <ul id="schedules-list">
-            <li>Loading schedules...</li> </ul>
+            <h3 style="margin-top: 15px;">Active Schedules:</h3>
+            <ul id="schedules-list">
+                <li>Loading schedules...</li> 
+            </ul>
+        </div>
     </div>
 
     <div id="log-panel">
-        <h2>Download History (Log) <button id="refresh-log-button" title="Refresh the download history below">Refresh Log</button></h2>
-        <!-- Summary and Chart -->
-        <div id="log-summary" style="margin-bottom:20px;">
-            <p>Total: <span id="total-count">0</span>,
-               Success: <span id="success-count">0</span>,
-               Failed: <span id="failed-count">0</span>
-            </p>
-            <canvas id="status-chart" width="200" height="200" style="max-width:200px;max-height:200px;display:block;margin:0 auto;"></canvas>
-        </div>
-        <div id="log-table-container">
-            <p>No log data available.</p>
+        <h2>
+            Download History (Log)
+            <button id="refresh-log-button" title="Refresh the download history below" style="vertical-align:middle;"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh Log</button>
+            <button type="button" class="toggle-section" data-target="log-panel-content" title="Show/Hide">
+                <i class="fa fa-chevron-down toggle-icon"></i>
+            </button>
+        </h2>
+        <div id="log-panel-content" class="section-content">
+            <div id="log-summary" style="margin-bottom:20px;">
+                <p>Total: <span id="total-count">0</span>,
+                   Success: <span id="success-count">0</span>,
+                   Failed: <span id="failed-count">0</span>
+                </p>
+                <canvas id="status-chart" width="200" height="200" style="max-width:200px;max-height:200px;display:block;margin:0 auto;"></canvas>
+            </div>
+            <div id="log-table-container">
+                <p>No log data available.</p>
+            </div>
         </div>
     </div>
 

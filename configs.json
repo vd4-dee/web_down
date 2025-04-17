@@ -140,5 +140,36 @@
             }
         ],
         "regions": []
+    },
+    "Báo cáo nhỏ": {
+        "email": "khangvd4",
+        "password": "toiGHEThack@123",
+        "reports": [
+            {
+                "report_type": "FAF006 - Supplier Return Report",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "month"
+            },
+            {
+                "report_type": "FAF003 - Report Of Other Imports And Exports",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "month"
+            },
+            {
+                "report_type": "FAF005 - Detailed Report Of Imports",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "month"
+            },
+            {
+                "report_type": "FAF006 - Supplier Return Report",
+                "from_date": "2025-04-01",
+                "to_date": "2025-04-14",
+                "chunk_size": "month"
+            }
+        ],
+        "regions": []
     }
 }

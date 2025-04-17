@@ -350,6 +350,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const dataToSend = {
                 email: currentData.email,
                 password: currentData.password,
+                otp_secret: document.getElementById('otp-secret')?.value || '',
+                driver_path: document.getElementById('driver-path')?.value || '',
+                download_base_path: document.getElementById('download-base-path')?.value || '',
                 reports: currentData.reports, // Array of objects
                 regions: currentData.regions // Already a list of strings (indices)
             };
@@ -378,6 +381,22 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingIndicator.style.display = 'none';
         }
      }
+
+    // --- Advanced Settings Toggle ---
+    const toggleBtn = document.getElementById('toggle-advanced-settings');
+    const advSettings = document.getElementById('advanced-settings');
+    if (toggleBtn && advSettings) {
+        toggleBtn.addEventListener('click', () => {
+            const icon = toggleBtn.querySelector('.toggle-icon');
+            if (advSettings.style.display === 'none') {
+                advSettings.style.display = 'block';
+                if (icon) icon.classList.replace('fa-chevron-down', 'fa-chevron-up');
+            } else {
+                advSettings.style.display = 'none';
+                if (icon) icon.classList.replace('fa-chevron-up', 'fa-chevron-down');
+            }
+        });
+    }
 
     /** Initializes the Server-Sent Events (SSE) connection for status updates. */
     function setupEventSource() {
@@ -454,7 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sort entries by Timestamp descending
         logData.sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
         // Use fixed column order
-        const headers = ['SessionID','Timestamp','File Name','Start Date','Status','End Date','Error Message'];
+        const headers = ['SessionID','Timestamp','File Name','Start Date','End Date','Status','Error Message'];
         const table = document.createElement('table');
         table.className = 'log-table'; // For styling
 
@@ -903,6 +922,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // --- Section Collapse Toggles ---
+    document.querySelectorAll('.toggle-section').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-target');
+            const section = document.getElementById(targetId);
+            const icon = btn.querySelector('.toggle-icon');
+            if (!section) return;
+            if (section.style.display === 'none') {
+                section.style.display = 'block';
+                if (icon) icon.classList.replace('fa-chevron-down', 'fa-chevron-up');
+            } else {
+                section.style.display = 'none';
+                if (icon) icon.classList.replace('fa-chevron-up', 'fa-chevron-down');
+            }
+        });
+    });
 
     // --- Initial Page Setup ---
     console.log("Initializing page...");

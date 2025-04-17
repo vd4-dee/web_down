@@ -332,7 +332,10 @@ def index():
     """Render the main UI page."""
     return render_template('index.html',
                            default_email=config.DEFAULT_EMAIL,
-                           default_password=config.DEFAULT_PASSWORD)
+                           default_password=config.DEFAULT_PASSWORD,
+                           default_otp_secret=config.OTP_SECRET,
+                           default_driver_path=config.DRIVER_PATH,
+                           default_download_base_path=config.DOWNLOAD_BASE_PATH)
 
 @app.route('/get-reports-regions', methods=['GET'])
 def get_reports_regions_data():
