@@ -609,6 +609,72 @@ class WebAutomation:
 
     # --- File Handling ---
     def extract_zip_files(self, status_callback=None):
+        """Extracts newly downloaded zip files and returns a list of extracted file paths."""
+        log_func = status_callback or self._log
+        log_func("Checking for new zip files to extract...")
+        extracted_something = False
+        files_after_download = set()
+        extracted_files = []
+        try:
+            if os.path.exists(self.download_folder):
+                 files_after_download = set(os.listdir(self.download_folder))
+            else:
+                 log_func("Warning: Download folder not found for extraction.")
+                 return [] # Cannot extract
+
+            # Identify new zip files (case-insensitive check)
+            zip_files = [f for f in files_after_download if f.lower().endswith('.zip')]
+            for zip_file in zip_files:
+                zip_path = os.path.join(self.download_folder, zip_file)
+                try:
+                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(self.download_folder)
+                        extracted_names = zip_ref.namelist()
+                        extracted_files.extend([os.path.join(self.download_folder, name) for name in extracted_names])
+                        log_func(f"Extracted files from {zip_file}: {extracted_names}")
+                except Exception as e:
+                     log_func(f"ERROR extracting '{zip_file}': {e}")
+                     traceback.print_exc()
+
+            # Update baseline *after* extraction if zips were deleted or new files appeared            if extracted_something:
+                # self.update_files_before_download() # Or update manually based on extracted names
+                pass # Decide if update is needed based on whether zips are deleted
+
+        except Exception as e:
+             log_func(f"Error during zip extraction process: {e}")
+             traceback.print_exc()
+        return extracted_files
+
+    def rename_extract_file(self, extracted_file_path, from_date, to_date, suffix="", status_callback=None):
+        """Renames a file extracted from a zip archive."""
+        log_func = status_callback or self._log
+        if not extracted_file_path or not os.path.isfile(extracted_file_path):
+            log_func(f"Rename extracted file failed: File '{extracted_file_path}' not found.")
+            return None
+        try:
+            file_dir, original_filename = os.path.split(extracted_file_path)
+            file_name_part, file_extension = os.path.splitext(original_filename)
+            from_date_formatted = datetime.strptime(from_date, '%Y-%m-%d').strftime('%d%m%Y')
+            to_date_formatted = datetime.strptime(to_date, '%Y-%m-%d').strftime('%d%m%Y')
+            new_name_base = f"{file_name_part}_{from_date_formatted}_{to_date_formatted}{suffix}{file_extension}".replace(' ','_')
+            new_full_path = os.path.join(file_dir, new_name_base)
+            # Handle naming conflicts
+            counter = 1
+            final_new_name = new_name_base
+            while os.path.exists(new_full_path):
+                final_new_name = f"{file_name_part}_{from_date_formatted}_{to_date_formatted}{suffix}_v{counter}{file_extension}".replace(' ','_')
+                new_full_path = os.path.join(file_dir, final_new_name)
+                counter += 1
+            os.rename(extracted_file_path, new_full_path)
+            log_func(f"Successfully renamed extracted file to: {final_new_name}")
+            return final_new_name
+        except Exception as e:
+            error_msg = f"Error renaming extracted file '{extracted_file_path}': {e}"
+            log_func(f"ERROR: {error_msg}")
+            traceback.print_exc()
+            return None # Indicate failure
+
+    def rename_downloaded_file(self, original_filename, from_date, to_date, suffix="", status_callback=None):
         """Extracts newly downloaded zip files."""
         log_func = status_callback or self._log
         log_func("Checking for new zip files to extract...")
@@ -787,7 +853,10 @@ class WebAutomation:
 
                 # Extract if it was a zip file
                 if downloaded_original_name.lower().endswith('.zip'):
-                    self.extract_zip_files(status_callback=log_func)
+                    extracted_files = self.extract_zip_files(status_callback=log_func)
+                    # Rename all extracted files after extraction
+                    for extracted_path in extracted_files:
+                        self.rename_extract_file(extracted_path, from_date, to_date, file_suffix, log_func)
 
                 log_status = "Success" if renamed_file else "Success (Rename Failed)"
                 log_func(f"Download and processing complete. Final state: {log_file_name}")
@@ -1091,7 +1160,10 @@ class WebAutomation:
                     log_file_name = renamed_file if renamed_file else downloaded_original_name
 
                     if downloaded_original_name.lower().endswith('.zip'):
-                        self.extract_zip_files(status_callback=log_func)
+                        extracted_files = self.extract_zip_files(status_callback=log_func)
+                        # Rename all extracted files after extraction
+                        for extracted_path in extracted_files:
+                            self.rename_extract_file(extracted_path, from_date, to_date, f"_{region_name}", log_func)
 
                     log_status = "Success" if renamed_file else "Success (Rename Failed)"
                     log_func(f"Region {region_name} download and processing complete. File: {log_file_name}")
