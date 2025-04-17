@@ -111,7 +111,8 @@ def run_download_process(params):
             raise ValueError("No reports configured for download.")
 
         # --- Prepare Download Folder ---
-        timestamp_folder = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # timestamp_folder = datetime.now().strftime("%Y%m%d")
+        timestamp_folder = "001" + datetime.now().strftime("%Y%m%d")
         specific_download_folder = os.path.join(config.DOWNLOAD_BASE_PATH, timestamp_folder)
         try:
             os.makedirs(specific_download_folder, exist_ok=True)

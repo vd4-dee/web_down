@@ -706,6 +706,10 @@ class WebAutomation:
         if not original_filename:
              log_func("Rename failed: No original filename provided.")
              return None
+        # Skip renaming for files already standardized
+        if original_filename.startswith("BaoCaoFAF001"):
+            log_func(f"Skipping rename for standardized file: {original_filename}")
+            return original_filename
 
         original_full_path = os.path.join(self.download_folder, original_filename)
 

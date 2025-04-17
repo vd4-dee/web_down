@@ -24,3 +24,24 @@ SessionID,Timestamp,File Name,Start Date,Status,End Date,Error Message
 20250417_165400,2025-04-17 17:04:39,BCNhapKhacXuatKhacThuoc_01042025_14042025.zip,2025-04-01,Success,2025-04-14,
 20250417_165400,2025-04-17 17:06:24,BaoCaoChiTietNhapHangThuoc_01042025_14042025.zip,2025-04-01,Success,2025-04-14,
 20250417_165400,2025-04-17 17:06:57,BaoCaoTraHangNCCThuoc_01042025_14042025_1.zip,2025-04-01,Success,2025-04-14,
+00120250417,2025-04-17 18:07:29,BaoCaoTraHangNCCThuoc_01042025_05042025.zip,2025-04-01,Success,2025-04-05,
+00120250417,2025-04-17 18:08:23,BaoCaoTraHangNCCThuoc_01042025_05042025_1.zip,2025-04-01,Success,2025-04-05,
+00120250417,2025-04-17 18:08:50,BaoCaoTraHangNCCThuoc_06042025_10042025.zip,2025-04-06,Success,2025-04-10,
+00120250417,2025-04-17 18:09:18,BaoCaoTraHangNCCThuoc_11042025_15042025.zip,2025-04-11,Success,2025-04-15,
+00120250417,2025-04-17 19:43:49,BaoCaoFAF001_BHCT_01042025_05042025_01042025_05042025.zip,2025-04-01,Success,2025-04-05,
+00120250417,2025-04-17 19:57:21,BaoCaoFAF001_BHCT_06042025_10042025_06042025_10042025.zip,2025-04-06,Success,2025-04-10,
+00120250417,2025-04-17 20:07:55,BaoCaoFAF001_BHCT_11042025_14042025_11042025_14042025.zip,2025-04-11,Success,2025-04-14,
+00120250417,2025-04-17 20:23:04,,2025-04-01,Failed (Click Download),2025-04-05,"Failed to click Download Button (Locator: ('id', 'ctl00_MainContent_btnExportCSVDemo_input')) after all attempts."
+00120250417,2025-04-17 20:40:32,,2025-04-06,Failed (WebDriver Error),2025-04-10,"WebDriver error during download steps: TimeoutException - Message: 
+Stacktrace:
+	GetHandleVerifier [0x00007FF740E55355+78597]
+	GetHandleVerifier [0x00007FF740E553B0+78688]
+	(No symbol) [0x00007FF740C091AA]
+	(..."
+00120250417,2025-04-17 20:55:43,,2025-04-11,Failed (WebDriver Error),2025-04-14,"WebDriver error during download steps: TimeoutException - Message: 
+Stacktrace:
+	GetHandleVerifier [0x00007FF740E55355+78597]
+	GetHandleVerifier [0x00007FF740E553B0+78688]
+	(No symbol) [0x00007FF740C091AA]
+	(..."
+00120250417,2025-04-17 21:04:07,,2025-04-01,Failed (Unexpected Error),2025-04-14,"Unexpected error during download steps: ProtocolError - ('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None))"
