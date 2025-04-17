@@ -32,7 +32,7 @@ from selenium.common.exceptions import (
 
 # --- Constants ---
 # Increased timeouts (in seconds)
-SELENIUM_COMMAND_TIMEOUT = 900 # Increased from default (usually 60s) for Selenium commands
+SELENIUM_COMMAND_TIMEOUT = 1500 # Increased from default (usually 60s) for Selenium commands
 WEBDRIVER_WAIT_TIMEOUT = 900   # Increased timeout for explicit waits (WebDriverWait)
 PAGE_LOAD_TIMEOUT = 900        # Increased timeout for page loads
 DOWNLOAD_WAIT_TIMEOUT = 1800   # Max time to wait for a single file download (30 min)
@@ -160,6 +160,7 @@ class WebAutomation:
         self.driver = None
         self.wait = None
         self.before_download = set()
+        self.extracted_zips = set()  # Track extracted zip files to avoid re-extraction
         self._status_callback = status_callback # Store callback for internal use
 
         self._log(f"Initializing WebAutomation. Download Folder: {self.download_folder}")
@@ -218,6 +219,11 @@ class WebAutomation:
                 options=chrome_options
             )
             self._log("WebDriver initialized.")
+            try:
+                self.driver.command_executor.set_timeout(SELENIUM_COMMAND_TIMEOUT)
+                self._log(f"Set driver command executor timeout to {SELENIUM_COMMAND_TIMEOUT}s.")
+            except Exception as e:
+                self._log(f"Warning: Could not set driver command executor timeout: {e}")
 
             self.driver.set_page_load_timeout(PAGE_LOAD_TIMEOUT)
             self.driver.implicitly_wait(5) # Reduce implicit wait, rely on explicit waits
@@ -612,7 +618,6 @@ class WebAutomation:
         """Extracts newly downloaded zip files and returns a list of extracted file paths."""
         log_func = status_callback or self._log
         log_func("Checking for new zip files to extract...")
-        extracted_something = False
         files_after_download = set()
         extracted_files = []
         try:
@@ -622,23 +627,28 @@ class WebAutomation:
                  log_func("Warning: Download folder not found for extraction.")
                  return [] # Cannot extract
 
-            # Identify new zip files (case-insensitive check)
+            # Identify zip files and filter only those not extracted before
             zip_files = [f for f in files_after_download if f.lower().endswith('.zip')]
-            for zip_file in zip_files:
+            new_zip_files = [f for f in zip_files if f not in self.extracted_zips]
+            if not new_zip_files:
+                log_func("No new zip files to extract.")
+                return extracted_files
+            for zip_file in new_zip_files:
                 zip_path = os.path.join(self.download_folder, zip_file)
                 try:
+                    log_func(f"Extracting '{zip_file}'...")
                     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                         zip_ref.extractall(self.download_folder)
                         extracted_names = zip_ref.namelist()
                         extracted_files.extend([os.path.join(self.download_folder, name) for name in extracted_names])
                         log_func(f"Extracted files from {zip_file}: {extracted_names}")
+                    # Mark this zip as extracted
+                    self.extracted_zips.add(zip_file)
+                except zipfile.BadZipFile:
+                     log_func(f"ERROR: Bad zip file '{zip_file}'. Skipping.")
                 except Exception as e:
                      log_func(f"ERROR extracting '{zip_file}': {e}")
                      traceback.print_exc()
-
-            # Update baseline *after* extraction if zips were deleted or new files appeared            if extracted_something:
-                # self.update_files_before_download() # Or update manually based on extracted names
-                pass # Decide if update is needed based on whether zips are deleted
 
         except Exception as e:
              log_func(f"Error during zip extraction process: {e}")
@@ -651,6 +661,11 @@ class WebAutomation:
         if not extracted_file_path or not os.path.isfile(extracted_file_path):
             log_func(f"Rename extracted file failed: File '{extracted_file_path}' not found.")
             return None
+        # Skip renaming for files already standardized
+        original_filename = os.path.basename(extracted_file_path)
+        if original_filename.startswith("BaoCaoFAF001"):
+            log_func(f"Skipping rename for standardized file: {original_filename}")
+            return original_filename
         try:
             file_dir, original_filename = os.path.split(extracted_file_path)
             file_name_part, file_extension = os.path.splitext(original_filename)
@@ -1192,7 +1207,7 @@ class WebAutomation:
              if "invalid session id" in str(e).lower():
                  log_status = "Failed (Invalid Session)"
                  log_error = f"WebDriver session invalid (region {region_name}): {str(e)[:150]}..."
-                 log_func(f"FATAL ERROR: {log_error}")
+                 log_func(f"FATAL: Session became invalid. Stopping.")
                  self.capture_screenshot(f"region_{region_name}_session_invalid")
                  raise # Re-raise critical session errors
              else:
@@ -1318,7 +1333,7 @@ class WebAutomation:
                  if "invalid session id" in str(wd_e).lower():
                      log_func("FATAL: Session became invalid. Stopping further chunks.")
                      fail_count += (total_chunks - (i + 1)) # Mark remaining as failed
-                     break # Stop processing more chunks
+                     break # Stop processing chunks
 
             except Exception as e:
                 fail_count += 1

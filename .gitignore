@@ -85,3 +85,7 @@ Desktop.ini
 
 # Node
 node_modules/
+
+#log
+download_log.csv
+
