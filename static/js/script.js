@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let reportDataCache = null; // Cache for report/region data (URLs, names, requirements)
     let sseConnection = null; // Holds the active Server-Sent Events connection
     let eventSource = null; // Holds the EventSource connection
+    let statusChart = null; // Chart.js instance for status chart
 
     // --- Helper Functions ---
 
@@ -450,14 +451,16 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function createLogTable(logData) {
         if (!logTableContainer || !Array.isArray(logData) || logData.length === 0) return;
-
+        // Sort entries by Timestamp descending
+        logData.sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
+        // Use fixed column order
+        const headers = ['SessionID','Timestamp','File Name','Start Date','Status','End Date','Error Message'];
         const table = document.createElement('table');
         table.className = 'log-table'; // For styling
 
         // Create table header
         const thead = table.createTHead();
         const headerRow = thead.insertRow();
-        const headers = Object.keys(logData[0]); // Get headers from first entry
         headers.forEach(headerText => {
             const th = document.createElement('th');
             th.textContent = headerText; // Display header text
@@ -470,8 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = tbody.insertRow();
             headers.forEach(header => {
                 const cell = row.insertCell();
-                let value = logEntry[header];
-                // Ensure value is displayed correctly (handle null/undefined)
+                const value = logEntry[header];
                 cell.textContent = (value === null || value === undefined) ? '' : String(value);
             });
         });
@@ -479,6 +481,31 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear container and append table
         logTableContainer.innerHTML = '';
         logTableContainer.appendChild(table);
+        // Update summary counts and chart
+        updateSummaryAndChart(logData);
+    }
+
+    /**
+     * Computes totals and renders the status chart
+     * @param {Array<Object>} logData
+     */
+    function updateSummaryAndChart(logData) {
+        const total = logData.length;
+        const successCount = logData.filter(e => e['Status'] && e['Status'].toLowerCase().startsWith('success')).length;
+        const failedCount = total - successCount;
+        document.getElementById('total-count').textContent = total;
+        document.getElementById('success-count').textContent = successCount;
+        document.getElementById('failed-count').textContent = failedCount;
+        const ctx = document.getElementById('status-chart').getContext('2d');
+        if (statusChart) statusChart.destroy();
+        statusChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Success', 'Failed'],
+                datasets: [{ data: [successCount, failedCount], backgroundColor: ['#28a745', '#dc3545'] }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
     }
 
     // --- Configuration Management Logic ---

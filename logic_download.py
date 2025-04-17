@@ -162,6 +162,9 @@ class WebAutomation:
         self.before_download = set()
         self.extracted_zips = set()  # Track extracted zip files to avoid re-extraction
         self._status_callback = status_callback # Store callback for internal use
+        # Derive session identifier from download folder name
+        import os as _os
+        self.session_id = _os.path.basename(self.download_folder)
 
         self._log(f"Initializing WebAutomation. Download Folder: {self.download_folder}")
 
@@ -469,15 +472,15 @@ class WebAutomation:
             with open(filename, 'a', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
                 if not file_exists or os.path.getsize(filename) == 0:
-                    writer.writerow(['Timestamp', 'Start Date', 'End Date', 'Status', 'File Name', 'Error Message'])
-                writer.writerow(log_data)
+                    writer.writerow(['SessionID','Timestamp','File Name','Start Date','Status','End Date','Error Message'])
+                # Reorder fields: Timestamp, File Name, Start Date, Status, End Date, Error Message
+                writer.writerow([log_data[0], log_data[1], log_data[2], log_data[3], log_data[4], log_data[5], log_data[6]])
         except IOError as e:
             print(f"CRITICAL ERROR: Could not write to log file {filename}: {e}")
             print(f"LOG_DATA (CSV failed): {log_data}")
         except Exception as e:
              print(f"CRITICAL ERROR: Unexpected error writing to log file {filename}: {e}")
              print(f"LOG_DATA (CSV failed): {log_data}")
-
 
     def capture_screenshot(self, filename_prefix="error_screenshot"):
         """Saves a screenshot of the current browser window."""
@@ -572,9 +575,18 @@ class WebAutomation:
 
             # Click Login Button Safely
             log_func("Clicking login button...")
-            if not self.safe_click(login_button_locator, "Login Button", retries=2, status_callback=log_func):
+            print(f"[DEBUG] Attempting robust click on locator: {login_button_locator}") # Console debug
+            # Using the robust click method
+            click_ok = self.robust_click_download_button(login_button_locator, description="CSV Download Button", status_callback=log_func)
+
+            if not click_ok:
+                log_func(f"ERROR: Failed to click Download Button (Locator: {login_button_locator}) after all attempts.")
                 self.capture_screenshot("login_click_failed")
                 raise WebDriverException("Failed to click login button after retries.")
+
+            log_func("Download click initiated (or attempted). Checking for alerts...")
+            # Handle potential alerts *after* clicking download
+            self.handle_alert(accept=True, status_callback=log_func)
 
             # Wait for Login Success by checking URL or a known element on the home page
             # !!! VERIFY THE EXPECTED URL OR ELEMENT AFTER SUCCESSFUL LOGIN !!!
@@ -595,22 +607,21 @@ class WebAutomation:
                 self.capture_screenshot("login_failed_or_timeout")
                 return False
 
-        except (TimeoutException, NoSuchElementException) as e:
-            log_error = f"Login failed: Could not find login elements ({type(e).__name__}). Check locators."
-            log_func(f"ERROR: {log_error}")
-            self.capture_screenshot("login_element_error")
-            return False # Return False instead of raising for retry logic
-        except WebDriverException as e: # Handled by decorator for retry
-            log_error = f"Login failed: WebDriver error occurred - {e}"
-            log_func(f"ERROR: {log_error}")
+        # Specific Exception Handling
+        except DownloadFailedException as df_err: # Catch failures from click or wait
+             log_func(f"DownloadFailedException caught: {df_err}")
+             # Screenshot likely already taken by the failing function
+             # No need to re-raise here, let finally block log
+
+        except WebDriverException as e:
+            log_func(f"ERROR: WebDriver error during login steps: {type(e).__name__} - {str(e)[:150]}...")
             self.capture_screenshot("login_webdriver_error")
             raise # Re-raise for decorator
         except Exception as e: # Catch other unexpected errors
-            log_error = f"Login failed: Unexpected error - {type(e).__name__}: {e}"
-            log_func(f"FATAL ERROR: {log_error}")
+            log_func(f"FATAL ERROR: Unexpected error during login steps: {type(e).__name__} - {e}")
             self.capture_screenshot("login_unexpected_error")
             traceback.print_exc()
-            raise WebDriverException(log_error) from e # Wrap for consistency
+            raise WebDriverException(log_func) from e # Wrap for consistency
 
 
     # --- File Handling ---
@@ -688,58 +699,6 @@ class WebAutomation:
             log_func(f"ERROR: {error_msg}")
             traceback.print_exc()
             return None # Indicate failure
-
-    def rename_downloaded_file(self, original_filename, from_date, to_date, suffix="", status_callback=None):
-        """Extracts newly downloaded zip files."""
-        log_func = status_callback or self._log
-        log_func("Checking for new zip files to extract...")
-        extracted_something = False
-        files_after_download = set()
-        try:
-            if os.path.exists(self.download_folder):
-                 files_after_download = set(os.listdir(self.download_folder))
-            else:
-                 log_func("Warning: Download folder not found for extraction.")
-                 return # Cannot extract
-
-            # Identify new zip files (case-insensitive check)
-            new_zip_files = {f for f in files_after_download if f not in self.before_download and f.lower().endswith('.zip')}
-
-            if not new_zip_files:
-                log_func("No new zip files found to extract.")
-                return
-
-            for zip_file in new_zip_files:
-                zip_file_path = os.path.join(self.download_folder, zip_file)
-                if not os.path.isfile(zip_file_path): continue
-
-                try:
-                    log_func(f"Extracting '{zip_file}'...")
-                    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-                        zip_ref.extractall(self.download_folder)
-                    log_func(f"Successfully extracted: {zip_file}")
-                    extracted_something = True
-                    # Optional: Delete zip after successful extraction
-                    # try:
-                    #     os.remove(zip_file_path)
-                    #     log_func(f"Deleted zip file: {zip_file}")
-                    # except OSError as del_e:
-                    #     log_func(f"Warning: Could not delete zip file {zip_file}: {del_e}")
-
-                except zipfile.BadZipFile:
-                     log_func(f"ERROR: Bad zip file '{zip_file}'. Skipping.")
-                except Exception as e:
-                     log_func(f"ERROR extracting '{zip_file}': {e}")
-                     traceback.print_exc()
-
-            # Update baseline *after* extraction if zips were deleted or new files appeared
-            if extracted_something:
-                # self.update_files_before_download() # Or update manually based on extracted names
-                pass # Decide if update is needed based on whether zips are deleted
-
-        except Exception as e:
-             log_func(f"Error during zip extraction process: {e}")
-             traceback.print_exc()
 
     def rename_downloaded_file(self, original_filename, from_date, to_date, suffix="", status_callback=None):
         """Renames a specific downloaded file."""
@@ -915,8 +874,9 @@ class WebAutomation:
         finally:
             # Log result regardless of success or failure
             log_data = [
+                self.session_id,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                from_date, to_date, log_status, log_file_name, log_error
+                log_file_name, from_date, log_status, to_date, log_error
             ]
             self.write_log_to_csv(log_data)
             log_func(f"Logged download status '{log_status}' for {from_date}-{to_date}.")
@@ -1098,7 +1058,7 @@ class WebAutomation:
         if region_index not in regions_data:
              log_func(f"ERROR: Invalid region index {region_index} passed.")
              # Log this error clearly
-             self.write_log_to_csv([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), from_date, to_date, f"Failed (Invalid Region Index: {region_index})", "", "Invalid index provided"], csv_filename)
+             self.write_log_to_csv([self.session_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), from_date, f"Failed (Invalid Region Index: {region_index})", to_date, "Invalid index provided"], csv_filename)
              return False # Fail this specific region download attempt
 
         region_name = regions_data[region_index]["name"]
@@ -1226,8 +1186,9 @@ class WebAutomation:
         finally:
             # --- Log Result ---
             log_data = [
+                self.session_id,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                from_date, to_date, f"{log_status} (Region: {region_name})", log_file_name, log_error
+                log_file_name, from_date, log_status, to_date, log_error
             ]
             self.write_log_to_csv(log_data)
             log_func(f"Logged region download status '{log_status}' for {from_date}-{to_date}, Region: {region_name}.")
@@ -1294,7 +1255,7 @@ class WebAutomation:
              message = f"Could not split date range {start_date} to {end_date} or range is invalid. No download performed."
              log_func(f"WARNING: {message}")
              # Log failure for the whole range?
-             self.write_log_to_csv([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), start_date, end_date, "Failed (Date Split)", "", message], csv_filename)
+             self.write_log_to_csv([self.session_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "", start_date, "Failed (Date Split)", end_date, message], csv_filename)
              return # Cannot proceed
 
         log_func(f"Total chunks to process: {total_chunks}")
@@ -1329,7 +1290,7 @@ class WebAutomation:
                  error_msg = f"WebDriver ERROR in Chunk {chunk_num}/{total_chunks} ({from_date_chunk} to {to_date_chunk}): {type(wd_e).__name__} - {str(wd_e)[:150]}..."
                  log_func(error_msg)
                  traceback.print_exc()
-                 self.write_log_to_csv([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), from_date_chunk, to_date_chunk, "Failed in Chunk (WebDriver)", "", error_msg], csv_filename)
+                 self.write_log_to_csv([self.session_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "", from_date_chunk, f"Failed in Chunk (WebDriver)", to_date_chunk, error_msg], csv_filename)
                  if "invalid session id" in str(wd_e).lower():
                      log_func("FATAL: Session became invalid. Stopping further chunks.")
                      fail_count += (total_chunks - (i + 1)) # Mark remaining as failed
@@ -1340,7 +1301,7 @@ class WebAutomation:
                 error_msg = f"UNEXPECTED ERROR in Chunk {chunk_num}/{total_chunks} ({from_date_chunk} to {to_date_chunk}): {type(e).__name__} - {e}"
                 log_func(error_msg)
                 traceback.print_exc()
-                self.write_log_to_csv([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), from_date_chunk, to_date_chunk, "Failed in Chunk (Unexpected)", "", error_msg], csv_filename)
+                self.write_log_to_csv([self.session_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "", from_date_chunk, f"Failed in Chunk (Unexpected)", to_date_chunk, error_msg], csv_filename)
                 # Consider stopping if errors are critical
 
             finally:
@@ -1416,7 +1377,7 @@ class WebAutomation:
         if not date_ranges:
              message = f"Could not split date range {start_date} to {end_date} for region download. No download performed."
              log_func(f"WARNING: {message}")
-             self.write_log_to_csv([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), start_date, end_date, "Failed (Region Date Split)", "", message], csv_filename)
+             self.write_log_to_csv([self.session_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "", start_date, "Failed (Region Date Split)", end_date, message], csv_filename)
              return
 
         log_func(f"Total chunks: {total_chunks}, Regions per chunk: {len(regions_to_process)}")
@@ -1454,7 +1415,7 @@ class WebAutomation:
                      log_func(error_msg)
                      traceback.print_exc()
                      # Log specific failure for this region/chunk
-                     self.write_log_to_csv([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), from_date_chunk, to_date_chunk, f"Failed (Region: {region_name}, WebDriver Error)", "", error_msg], csv_filename)
+                     self.write_log_to_csv([self.session_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "", from_date_chunk, f"Failed (Region: {region_name}, WebDriver Error)", to_date_chunk, error_msg], csv_filename)
                      if "invalid session id" in str(wd_region_e).lower():
                          log_func("FATAL: Session became invalid during region processing. Stopping all.")
                          # Need a way to break out of outer loops or signal failure
@@ -1465,7 +1426,7 @@ class WebAutomation:
                      error_msg = f"UNEXPECTED ERROR processing Region {region_name} in Chunk {chunk_num}: {type(e_region).__name__} - {e_region}"
                      log_func(error_msg)
                      traceback.print_exc()
-                     self.write_log_to_csv([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), from_date_chunk, to_date_chunk, f"Failed (Region: {region_name}, Unexpected)", "", error_msg], csv_filename)
+                     self.write_log_to_csv([self.session_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "", from_date_chunk, f"Failed (Region: {region_name}, Unexpected)", to_date_chunk, error_msg], csv_filename)
                      # Consider if unexpected errors should stop the whole process
 
                  finally:

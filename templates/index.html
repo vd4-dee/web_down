@@ -4,6 +4,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Report Downloader</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Charts and Icons -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body {
             font-family: sans-serif;
@@ -284,8 +287,17 @@
 
     <div id="log-panel">
         <h2>Download History (Log) <button id="refresh-log-button" title="Refresh the download history below">Refresh Log</button></h2>
+        <!-- Summary and Chart -->
+        <div id="log-summary" style="margin-bottom:20px;">
+            <p>Total: <span id="total-count">0</span>,
+               Success: <span id="success-count">0</span>,
+               Failed: <span id="failed-count">0</span>
+            </p>
+            <canvas id="status-chart" width="200" height="200" style="max-width:200px;max-height:200px;display:block;margin:0 auto;"></canvas>
+        </div>
         <div id="log-table-container">
-            <p>No log data available.</p> </div>
+            <p>No log data available.</p>
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
