@@ -94,7 +94,29 @@ document.addEventListener('DOMContentLoaded', () => {
             notificationPopup.classList.remove('show');
         }, duration);
     }
-
+    // Lưu/khôi phục trạng thái bảng report
+    function saveReportTableState() {
+        if (!reportTableBody) return;
+        localStorage.setItem('reportTableHTML', reportTableBody.innerHTML);
+    }
+    function restoreReportTableState() {
+        if (!reportTableBody) return false;
+        const saved = localStorage.getItem('reportTableHTML');
+        if (saved) {
+            reportTableBody.innerHTML = saved;
+            // Gắn lại event cho các select vừa được khôi phục
+            const selects = document.querySelectorAll("select[name='report_type[]']");
+            selects.forEach(sel => {
+                if (!sel.dataset.listenerAttached) {
+                    sel.addEventListener('change', updateRegionSelectionVisibilityBasedOnAllRows);
+                    sel.dataset.listenerAttached = 'true';
+                }
+            });
+            updateRegionSelectionVisibilityBasedOnAllRows && updateRegionSelectionVisibilityBasedOnAllRows();
+            return true;
+        }
+        return false;
+    }
     function hideNotification() {
         if (notificationPopup) {
             notificationPopup.classList.remove('show');
@@ -193,7 +215,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const now = new Date();
             const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            firstDayOfMonth.setHours(firstDayOfMonth.getHours() + 7);
             const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            yesterday.setHours(yesterday.getHours() + 7);
             if (fromDateInput) fromDateInput.value = formatDate(firstDayOfMonth);
             if (toDateInput) toDateInput.value = formatDate(yesterday);
         } catch (e) {
@@ -252,7 +276,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetchAndDisplaySchedules();
             }
             if (targetId === 'main-download-panel') {
-                fetchAndPopulateReportData();
+                // Ưu tiên khôi phục trạng thái bảng report nếu có
+                if (!restoreReportTableState()) {
+                    fetchAndPopulateReportData();
+                }
                 fetchAndPopulateConfigs(); // Load configs for download panel
             }
         } else {
@@ -276,6 +303,14 @@ document.addEventListener('DOMContentLoaded', () => {
             switchPanel(targetId);
         });
     });
+
+    // Lưu trạng thái bảng report mỗi khi có thay đổi
+    if (reportTableBody) {
+        reportTableBody.addEventListener('input', saveReportTableState);
+        reportTableBody.addEventListener('change', saveReportTableState);
+        reportTableBody.addEventListener('DOMSubtreeModified', saveReportTableState);
+    }
+
 
     suggestionCards.forEach(card => {
         card.addEventListener('click', (e) => {
@@ -318,6 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td><button type="button" class="remove-row-button" title="Remove this report row"><i class="fas fa-trash-alt"></i></button></td>
                     `;
                     reportTableBody.appendChild(row);
+                    setDefaultDates(row); // Đặt giá trị mặc định cho ngày
                     populateAllReportDropdowns(data.reports);
                 }
             } else {
@@ -512,6 +548,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (validationError) {
             downloadButton.disabled = false;
             loadingIndicator.style.display = 'none';
+            // Enable lại các input/select nếu có lỗi
+            if (reportTableBody) {
+                reportTableBody.querySelectorAll('input, select, button').forEach(el => {
+                    el.disabled = false;
+                    el.classList.remove('disabled-during-download');
+                });
+            }
             showNotification("Please fix the errors in the form.", "error");
             return;
         }
@@ -529,10 +572,24 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 downloadButton.disabled = false;
                 loadingIndicator.style.display = 'none';
+                // Enable lại các input/select nếu không bắt đầu download
+                if (reportTableBody) {
+                    reportTableBody.querySelectorAll('input, select, button').forEach(el => {
+                        el.disabled = false;
+                        el.classList.remove('disabled-during-download');
+                    });
+                }
             }
         } catch (error) {
             downloadButton.disabled = false;
             loadingIndicator.style.display = 'none';
+            // Enable lại các input/select nếu có lỗi
+            if (reportTableBody) {
+                reportTableBody.querySelectorAll('input, select, button').forEach(el => {
+                    el.disabled = false;
+                    el.classList.remove('disabled-during-download');
+                });
+            }
         }
     }
 
@@ -832,7 +889,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (form) {
-        form.addEventListener('submit', handleDownloadFormSubmit);
+        form.addEventListener('submit', event => {
+            localStorage.removeItem('reportTableHTML'); // Xóa trạng thái khi nhấn Download
+            // Disable và làm mờ các input/select trong bảng report
+            if (reportTableBody) {
+                reportTableBody.querySelectorAll('input, select, button').forEach(el => {
+                    el.disabled = true;
+                    el.classList.add('disabled-during-download');
+                });
+            }
+            handleDownloadFormSubmit(event);
+        });
     }
 
     if (refreshLogButton) {

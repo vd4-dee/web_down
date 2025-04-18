@@ -48,3 +48,26 @@ Stacktrace:
 00120250418,2025-04-18 10:55:20,BaoCaoTraHangNCCThuoc_01042025_14042025.zip,2025-04-01,Success,2025-04-14,
 00120250418,2025-04-18 17:01:28,BaoCaoTraHangNCCThuoc_(1)_01042025_14042025.zip,2025-04-01,Success,2025-04-14,
 00120250418,2025-04-18 17:27:13,BaoCaoFAF001_BHCT_01042025_01042025.zip,2025-04-01,Success,2025-04-01,
+00120250418,2025-04-18 21:18:29,BaoCaoFAF001_BHCT_01042025_05042025.zip,2025-04-01,Success,2025-04-05,
+00120250418,2025-04-18 21:31:42,BaoCaoTraHangNCCThuoc_01042025_14042025.zip,2025-04-01,Success,2025-04-14,
+00120250418,2025-04-18 21:37:27,BCNhapKhacXuatKhacThuoc_01042025_14042025.zip,2025-04-01,Success,2025-04-14,
+00120250418,2025-04-18 21:41:18,,2025-04-01,Failed (WebDriver Error),2025-04-14,"WebDriver error during download steps: NoSuchWindowException - Message: no such window: target window already closed
+from unknown error: web view not found
+  (Session info: chrome=135.0.7049.85)
+Stacktrace:
+	GetHa..."
+00120250418,2025-04-18 21:41:18,,2025-04-01,Failed (WebDriver Error),2025-04-14,"WebDriver error during download steps: NoSuchWindowException - Message: no such window: target window already closed
+from unknown error: web view not found
+  (Session info: chrome=135.0.7049.85)
+Stacktrace:
+	GetHa..."
+00120250418,2025-04-18 21:41:18,,2025-04-01,Failed (WebDriver Error),2025-04-14,"WebDriver error during download steps: NoSuchWindowException - Message: no such window: target window already closed
+from unknown error: web view not found
+  (Session info: chrome=135.0.7049.85)
+Stacktrace:
+	GetHa..."
+00120250418,2025-04-18 21:41:18,,2025-04-01,Failed (WebDriver Error),2025-04-14,"WebDriver error during download steps: NoSuchWindowException - Message: no such window: target window already closed
+from unknown error: web view not found
+  (Session info: chrome=135.0.7049.85)
+Stacktrace:
+	GetHa..."
