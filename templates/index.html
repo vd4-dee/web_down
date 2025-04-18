@@ -1,366 +1,279 @@
 <!DOCTYPE html>
-<html lang="en"> <head>
+<html lang="vi">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Report Downloader</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <!-- Charts and Icons -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Report Tools</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body {
-            font-family: sans-serif;
-            padding: 15px;
-            background-color: #f0f2f5;
-        }
-        h1, h2, h3 {
-            color: #333;
-        }
-        label {
-            margin-right: 5px;
-            display: inline-block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #555;
-        }
-        input[type="text"],
-        input[type="password"],
-        input[type="date"],
-        input[type="datetime-local"],
-        input[type="number"],
-        select {
-            margin-right: 10px;
-            padding: 8px; /* Increased padding */
-            border-radius: 4px;
-            border: 1px solid #ccc;
-            margin-bottom: 10px;
-            min-width: 150px; /* Minimum width for inputs/selects */
-        }
-        button {
-            padding: 8px 15px; /* Increased padding */
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            background-color: #007bff;
-            color: white;
-            margin-left: 5px;
-            vertical-align: middle;
-            font-size: 0.95em;
-            transition: background-color 0.2s ease;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        .delete-button {
-             background-color: #dc3545;
-        }
-        .delete-button:hover {
-             background-color: #c82333;
-        }
-        #config-management, #scheduling, #control-panel, #status-panel, #log-panel {
-            margin-top: 20px;
-            padding: 20px; /* Increased padding */
-            border: 1px solid #d1d9e6; /* Softer border */
-            border-radius: 8px;
-            background-color: #ffffff; /* White background */
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow */
-        }
-        #config-management h2, #scheduling h2, #control-panel h2, #status-panel h2, #log-panel h2 {
-            margin-top: 0;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-            color: #0056b3; /* Header color */
-        }
-        #report-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-        }
-        #report-table th, #report-table td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        #report-table th {
-            background-color: #e9ecef; /* Header background */
-            color: #495057;
-        }
-        #report-table td select, #report-table td input {
-            width: 95%; /* Make inputs fill cell */
-            box-sizing: border-box;
-        }
-        #report-table .remove-row-button {
-            background-color: #ffc107;
-            color: #333;
-        }
-        #report-table .remove-row-button:hover {
-            background-color: #e0a800;
-        }
-        #add-row-button {
-            background-color: #28a745;
-        }
-        #add-row-button:hover {
-            background-color: #218838;
-        }
-        #status-messages {
-            height: 200px;
-            overflow-y: scroll;
-            border: 1px solid #eee;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            font-size: 0.9em;
-            line-height: 1.4;
-        }
-        #log-table-container {
-             max-height: 300px;
-             overflow-y: auto;
-             border: 1px solid #eee;
-             border-radius: 4px;
-        }
-        .log-table { /* Style for the generated log table */
-             width: 100%;
-             border-collapse: collapse;
-        }
-        .log-table th, .log-table td {
-            border: 1px solid #ddd;
-            padding: 6px;
-            text-align: left;
-            font-size: 0.9em;
-        }
-        .log-table th {
-             background-color: #f2f2f2;
-        }
-        #schedules-list {
-            list-style: none;
-            padding: 0;
-            margin-top: 10px;
-        }
-         #schedules-list li {
-            margin-bottom: 8px;
-            padding: 10px; /* Increased padding */
-            border: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: #fff;
-            border-radius: 4px;
-         }
-         #schedules-list li span {
-             margin-right: 10px;
-             flex-grow: 1;
-         }
-         #region-selection {
-             margin-top: 15px; /* Increased margin */
-             padding: 15px; /* Increased padding */
-             border: 1px dashed #aed6f1; /* Dashed border */
-             display: none; /* Hidden by default */
-             border-radius: 4px;
-             background-color: #eaf2f8; /* Light blue background */
-         }
-         #region-selection label { /* Style for the main label */
-             font-weight: bold;
-             color: #154360;
-             margin-bottom: 10px;
-         }
-         /* Style for individual checkbox labels */
-         #region-selection label[for^="region-"] {
-             display: inline-block; /* Keep inline */
-             margin-right: 15px;
-             font-weight: normal; /* Normal weight */
-             color: #333; /* Reset color */
-         }
-         #region-selection input[type="checkbox"] {
-             margin-right: 5px;
-             vertical-align: middle;
-         }
-         .schedule-info {
-            font-size: 0.9em;
-            color: #555;
-         }
-         #loading-indicator {
-             margin-left: 10px;
-             font-style: italic;
-             color: #0056b3;
-         }
-         .section-content {
-             display: none;
-         }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <h1>Report Downloader</h1>
+    <aside id="sidebar">
+        <h2 class="sidebar-title">Menu</h2>
+        <nav>
+            <ul>
+                <li><a href="#main-download-panel" class="sidebar-link active" data-target="main-download-panel"><i class="fas fa-download sidebar-icon"></i> <span>Download Reports</span></a></li>
+                <li><a href="#bulk-email-panel" class="sidebar-link" data-target="bulk-email-panel"><i class="fas fa-envelope sidebar-icon"></i> <span>Bulk Email</span></a></li>
+                <li><a href="#scheduling-panel" class="sidebar-link" data-target="scheduling-panel"><i class="fas fa-calendar-alt sidebar-icon"></i> <span>Schedule Download</span></a></li>
+                <li><a href="#log-panel" class="sidebar-link" data-target="log-panel"><i class="fas fa-history sidebar-icon"></i> <span>Download History</span></a></li>
+                <li><a href="#advanced-settings-panel" class="sidebar-link" data-target="advanced-settings-panel"><i class="fas fa-cog sidebar-icon"></i> <span>Advanced Settings</span></a></li>
+            </ul>
+        </nav>
+    </aside>
 
-    <!-- Advanced Settings Toggle -->
-    <div id="advanced-toggle-container" style="margin: 10px 0;">
-        <button type="button" id="toggle-advanced-settings" title="Show/Hide advanced settings">
-            <i class="fa fa-cog"></i> Advanced Settings <i class="fa fa-chevron-down toggle-icon"></i>
-        </button>
-    </div>
-    <div id="advanced-settings" style="display: none; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #fff; margin-bottom:20px;">
-        <div style="margin-bottom: 10px;">
-            <label for="otp-secret">OTP Secret:</label>
-            <input type="password" id="otp-secret" name="otp_secret" value="{{ default_otp_secret or '' }}">
+    <div id="main-content">
+        <div id="notification" class="notification">
+            <span id="notification-message"></span>
+            <button id="notification-close" class="notification-close">×</button>
         </div>
-        <div style="margin-bottom: 10px;">
-            <label for="driver-path">ChromeDriver Path:</label>
-            <input type="text" id="driver-path" name="driver_path" value="{{ default_driver_path or '' }}">
-        </div>
-        <div>
-            <label for="download-base-path">Download Base Path:</label>
-            <input type="text" id="download-base-path" name="download_base_path" value="{{ default_download_base_path or '' }}">
-        </div>
-    </div>
 
-    <div id="config-management">
-        <h2>
-            Configuration Management
-            <button type="button" class="toggle-section" data-target="config-management-content" title="Show/Hide">
-                <i class="fa fa-chevron-down toggle-icon"></i>
-            </button>
-        </h2>
-        <div id="config-management-content" class="section-content">
-            <div>
-                <label for="config-name">Configuration Name:</label>
-                <input type="text" id="config-name" placeholder="E.g., Monthly Reports">
-                <button id="save-config-button" title="Save the current settings below as a new configuration">Save Current Config</button>
-            </div>
-            <div style="margin-top: 10px;">
-                <label for="saved-configs-dropdown">Load/Delete Config:</label>
-                <select id="saved-configs-dropdown">
-                    <option value="">-- Select Configuration --</option>
-                </select>
-                <button id="load-config-button" title="Load the selected configuration into the form below">Load</button>
-                <button id="delete-config-button" class="delete-button" title="Delete the selected configuration">Delete</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="control-panel">
-        <h2>
-            Download Configuration
-            <button type="button" class="toggle-section" data-target="control-panel-content" title="Show/Hide">
-                <i class="fa fa-chevron-down toggle-icon"></i>
-            </button>
-        </h2>
-        <div id="control-panel-content" class="section-content">
-            <form id="download-form">
-                <div><label for="email">Email:</label>
-                    <input type="text" id="email" name="email" value="{{ default_email or '' }}" required>
+        <h1 id="section-title" class="main-title">Download Reports</h1>
+        <section class="suggestion-cards">
+            <div class="card" data-target="main-download-panel">
+                <i class="fas fa-download card-icon"></i>
+                <div class="card-content">
+                    <h3 class="card-title">Download Reports</h3>
+                    <p class="card-description">Configure and download multiple reports.</p>
                 </div>
-                <div>
-                    <label for="password">Password:</label>
-                    <input type="password" id="password" name="password" value="{{ default_password or '' }}" required>
+                <button class="card-button">Open</button>
+            </div>
+            <div class="card" data-target="bulk-email-panel">
+                <i class="fas fa-envelope-open-text card-icon"></i>
+                <div class="card-content">
+                    <h3 class="card-title">Bulk Email</h3>
+                    <p class="card-description">Send emails to multiple recipients.</p>
                 </div>
-                <hr style="margin: 15px 0;"> 
-                <table id="report-table">
+                <button class="card-button">Open</button>
+            </div>
+            <div class="card" data-target="scheduling-panel">
+                <i class="fas fa-calendar-check card-icon"></i>
+                <div class="card-content">
+                    <h3 class="card-title">Schedule Download</h3>
+                    <p class="card-description">Set up automated report downloads.</p>
+                </div>
+                <button class="card-button">Open</button>
+            </div>
+            <div class="card" data-target="log-panel">
+                <i class="fas fa-clipboard-list card-icon"></i>
+                <div class="card-content">
+                    <h3 class="card-title">Download History</h3>
+                    <p class="card-description">View past download activities and logs.</p>
+                </div>
+                <button class="card-button">Open</button>
+            </div>
+        </section>
+
+        <div class="main-panel" id="main-download-panel" style="display: block;">
+            <div class="config-management-block">
+                <h2>Configuration Management</h2>
+                <div class="form-group">
+                    <label for="config-name">Configuration Name:</label>
+                    <input type="text" id="config-name" placeholder="E.g., Monthly Reports">
+                    <button id="save-config-button" title="Save the current settings below as a new configuration">Save Current Config</button>
+                </div>
+                <div class="form-group">
+                    <label for="saved-configs-dropdown">Load/Delete Config:</label>
+                    <select id="saved-configs-dropdown">
+                        <option value="">-- Select Configuration --</option>
+                        <option value="" disabled>Loading configurations...</option>
+                    </select>
+                    <div class="btn-group-config">
+                        <button id="load-config-button" title="Load the selected configuration into the form below">Load</button>
+                        <button id="delete-config-button" class="delete-button" title="Delete the selected configuration">Delete</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="download-config-block">
+                <h2>Download Configuration</h2>
+                <form id="download-form">
+                    <div class="form-group">
+                        <label for="email">Email:</label>
+                        <input type="text" id="email" name="email" value="{{ default_email or '' }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" value="{{ default_password or '' }}" required>
+                    </div>
+                    <hr class="divider">
+
+                    <div class="table-controls">
+                        <input type="text" id="report-table-search" class="table-search" placeholder="Search reports...">
+                        <button type="button" id="add-row-button" title="Add another report row"><i class="fas fa-plus"></i> Add Report</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table id="report-table" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Report Name</th>
+                                    <th>From Date</th>
+                                    <th>To Date</th>
+                                    <th>Chunk Size</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <select name="report_type[]" class="report-type-select" required>
+                                            <option value="">-- Select Report --</option>
+                                            <option value="" disabled>Loading reports...</option>
+                                        </select>
+                                    </td>
+                                    <td><input type="date" name="from_date[]" required></td>
+                                    <td><input type="date" name="to_date[]" required></td>
+                                    <td><input type="text" name="chunk_size[]" value="5" placeholder="E.g.: 5 or month"></td>
+                                    <td><button type="button" class="remove-row-button" title="Remove this report row"><i class="fas fa-trash-alt"></i></button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="region-selection" style="display: none;">
+                        <label>Select Region(s) (for required reports):</label><br>
+                    </div>
+                    <br>
+
+                    <button type="submit" id="download-button"><i class="fas fa-cloud-download-alt"></i> Download All</button>
+                    <span id="loading-indicator" style="display: none;">Processing... <i class="fas fa-spinner fa-spin"></i></span>
+                </form>
+            </div>
+
+            <div class="progress-status-block">
+                <h2>Progress Status</h2>
+                <div id="status-messages">
+                    <p class="subtext">No activity yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-panel" id="bulk-email-panel" style="display: none;">
+            <h2>Bulk Email Sender</h2>
+            <p class="subtext">Configure and send emails to multiple recipients.</p>
+            <form id="bulk-email-form">
+                <div class="form-group">
+                    <label for="email-subject">Subject:</label>
+                    <input type="text" id="email-subject" name="subject" required>
+                </div>
+                <div class="form-group">
+                    <label for="email-body">Body:</label>
+                    <textarea id="email-body" name="body" rows="6" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="email-recipients">Recipients (CSV or one per line):</label>
+                    <textarea id="email-recipients" name="recipients" rows="4" required placeholder="user1@example.com, user2@example.com..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="email-attachment">Attachment (Optional):</label>
+                    <input type="file" id="email-attachment" name="attachment">
+                </div>
+                <button type="submit" id="send-email-button"><i class="fas fa-paper-plane"></i> Send Emails</button>
+                <span id="email-loading-indicator" style="display: none;">Sending... <i class="fas fa-spinner fa-spin"></i></span>
+            </form>
+            <div class="progress-status-block">
+                <h2>Email Sending Status</h2>
+                <div id="email-status-messages">
+                    <p class="subtext">No activity yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-panel" id="scheduling-panel" style="display: none;">
+            <h2>Schedule Download Jobs</h2>
+            <p class="subtext">Automate your report downloads based on saved configurations.</p>
+            <div class="scheduling-config">
+                <div class="form-group">
+                    <label for="schedule-config-select">Select Config to Schedule:</label>
+                    <select id="schedule-config-select">
+                        <option value="">-- Select Saved Config --</option>
+                        <option value="" disabled>Loading configurations...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="schedule-datetime">Run At (Date & Time):</label>
+                    <input type="datetime-local" id="schedule-datetime">
+                </div>
+                <button id="schedule-button" title="Schedule the selected configuration to run once at the specified time"><i class="fas fa-clock"></i> Schedule Job</button>
+            </div>
+
+            <div class="active-schedules">
+                <h3>Active Schedules</h3>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Configuration</th>
+                                <th>Next Run Time</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schedules-list">
+                            <tr><td colspan="3" class="subtext">No schedules available.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-panel" id="log-panel" style="display: none;">
+            <div class="log-header">
+                <h2>Download History</h2>
+                <button id="refresh-log-button" title="Refresh the download history"><i class="fas fa-sync-alt"></i> Refresh Log</button>
+            </div>
+            <p class="subtext">Review the status and details of past download attempts.</p>
+            <div id="log-summary" class="log-summary-container">
+                <div class="summary-item">Total: <span id="total-count">0</span></div>
+                <div class="summary-item success">Success: <span id="success-count">0</span></div>
+                <div class="summary-item failed">Failed: <span id="failed-count">0</span></div>
+                <div class="chart-container">
+                    <canvas id="status-chart"></canvas>
+                </div>
+            </div>
+            <div class="table-controls">
+                <input type="text" id="log-table-search" class="table-search" placeholder="Search logs...">
+            </div>
+            <div id="log-table-container" class="table-responsive">
+                <table id="log-data-table" class="data-table">
                     <thead>
                         <tr>
-                            <th>Report Name</th>
-                            <th>From Date</th>
-                            <th>To Date</th>
-                            <th>Chunk Size</th>
-                            <th>Actions</th>
+                            <th>SessionID</th>
+                            <th>Timestamp</th>
+                            <th>File Name</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Status</th>
+                            <th>Error Message</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>
-                                <select name="report_type[]" class="report-type-select" required>
-                                    <option value="">-- Loading Reports --</option>
-                                </select>
-                            </td>
-                            <td><input type="date" name="from_date[]" required></td>
-                            <td><input type="date" name="to_date[]" required></td>
-                            <td><input type="text" name="chunk_size[]" value="5" placeholder="E.g.: 5 or month"></td>
-                            <td><button type="button" class="remove-row-button" title="Remove this report row">Remove</button></td>
-                        </tr>
+                        <tr><td colspan="7" class="subtext">No log data available.</td></tr>
                     </tbody>
                 </table>
-                <button type="button" id="add-row-button" title="Add another report row">Add Report</button>
-                <br><br>
-
-                <div id="region-selection" style="display: none;">
-                    <label>Select Region(s) (for required reports):</label><br>
-                </div>
-                <br>
-
-                <button type="submit" id="download-button">Download All</button>
-                <span id="loading-indicator" style="display: none;">Processing...</span>
-            </form>
-        </div>
-    </div>
-
-    <div id="status-panel">
-        <h2>
-            Progress Status
-            <button type="button" class="toggle-section" data-target="status-panel-content" title="Show/Hide">
-                <i class="fa fa-chevron-down toggle-icon"></i>
-            </button>
-        </h2>
-        <div id="status-panel-content" class="section-content">
-            <div id="status-messages">
-                <p>No activity yet.</p> 
             </div>
         </div>
-    </div>
 
-    <div id="scheduling">
-        <h2>
-            Schedule Download
-            <button type="button" class="toggle-section" data-target="scheduling-content" title="Show/Hide">
-                <i class="fa fa-chevron-down toggle-icon"></i>
-            </button>
-        </h2>
-        <div id="scheduling-content" class="section-content">
-            <div>
-                <label for="schedule-config-select">Select Config:</label>
-                <select id="schedule-config-select">
-                    <option value="">-- Select Saved Config --</option>
-                </select>
+        <div class="main-panel" id="advanced-settings-panel" style="display: none;">
+            <h2>Advanced Settings</h2>
+            <p class="subtext">Configure application-level settings (optional).</p>
+            <div class="form-group">
+                <label for="otp-secret">OTP Secret:</label>
+                <input type="password" id="otp-secret" name="otp_secret" value="{{ default_otp_secret or '' }}">
             </div>
-            <div>
-                <label for="schedule-datetime">Run At (Date & Time):</label>
-                <input type="datetime-local" id="schedule-datetime">
+            <div class="form-group">
+                <label for="driver-path">ChromeDriver Path:</label>
+                <input type="text" id="driver-path" name="driver_path" value="{{ default_driver_path or '' }}">
             </div>
-            <div>
-                <button id="schedule-button" title="Schedule the selected configuration to run once at the specified time">Schedule Job</button>
+            <div class="form-group">
+                <label for="download-base-path">Download Base Path:</label>
+                <input type="text" id="download-base-path" name="download_base_path" value="{{ default_download_base_path or '' }}">
             </div>
-
-            <h3 style="margin-top: 15px;">Active Schedules:</h3>
-            <ul id="schedules-list">
-                <li>Loading schedules...</li> 
-            </ul>
+            <button id="save-advanced-settings" title="Save advanced settings"><i class="fas fa-save"></i> Save Settings</button>
         </div>
     </div>
-
-    <div id="log-panel">
-        <h2>
-            Download History (Log)
-            <button id="refresh-log-button" title="Refresh the download history below" style="vertical-align:middle;"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh Log</button>
-            <button type="button" class="toggle-section" data-target="log-panel-content" title="Show/Hide">
-                <i class="fa fa-chevron-down toggle-icon"></i>
-            </button>
-        </h2>
-        <div id="log-panel-content" class="section-content">
-            <div id="log-summary" style="margin-bottom:20px;">
-                <p>Total: <span id="total-count">0</span>,
-                   Success: <span id="success-count">0</span>,
-                   Failed: <span id="failed-count">0</span>
-                </p>
-                <canvas id="status-chart" width="200" height="200" style="max-width:200px;max-height:200px;display:block;margin:0 auto;"></canvas>
-            </div>
-            <div id="log-table-container">
-                <p>No log data available.</p>
-            </div>
-        </div>
-    </div>
-
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>

@@ -45,3 +45,6 @@ Stacktrace:
 	(No symbol) [0x00007FF740C091AA]
 	(..."
 00120250417,2025-04-17 21:04:07,,2025-04-01,Failed (Unexpected Error),2025-04-14,"Unexpected error during download steps: ProtocolError - ('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None))"
+00120250418,2025-04-18 10:55:20,BaoCaoTraHangNCCThuoc_01042025_14042025.zip,2025-04-01,Success,2025-04-14,
+00120250418,2025-04-18 17:01:28,BaoCaoTraHangNCCThuoc_(1)_01042025_14042025.zip,2025-04-01,Success,2025-04-14,
+00120250418,2025-04-18 17:27:13,BaoCaoFAF001_BHCT_01042025_01042025.zip,2025-04-01,Success,2025-04-01,

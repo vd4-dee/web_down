@@ -27,6 +27,10 @@ import link_report
 
 app = Flask(__name__)
 
+# Module Blueprints
+from modules.email import email_bp
+app.register_blueprint(email_bp, url_prefix='/email')
+
 # Constants
 CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'configs.json')
 LOG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'download_log.csv') # Match logic_download default?

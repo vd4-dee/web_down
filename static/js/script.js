@@ -1,24 +1,29 @@
-// static/js/script.js
-
-// Wrap all code in DOMContentLoaded to ensure elements exist
 document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOM fully loaded and parsed.");
 
-    // --- DOM Element References ---
+    // --- Element References ---
+    const sidebarLinks = document.querySelectorAll('#sidebar .sidebar-link');
+    const mainPanels = document.querySelectorAll('#main-content .main-panel');
+    const suggestionCards = document.querySelectorAll('.suggestion-cards .card');
+    const sectionTitleElement = document.getElementById('section-title');
+    const notificationPopup = document.getElementById('notification');
+    const notificationMessage = document.getElementById('notification-message');
+    const notificationCloseBtn = document.getElementById('notification-close');
+
+    // Report Download Elements
     const form = document.getElementById('download-form');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
     const reportTableBody = document.querySelector("#report-table tbody");
     const addRowButton = document.getElementById('add-row-button');
     const reportTable = document.getElementById("report-table");
-
     const regionSelectionDiv = document.getElementById('region-selection');
     const downloadButton = document.getElementById('download-button');
     const loadingIndicator = document.getElementById('loading-indicator');
     const statusMessagesDiv = document.getElementById('status-messages');
-    const logTableContainer = document.getElementById('log-table-container');
-    const refreshLogButton = document.getElementById('refresh-log-button');
+    const reportTableSearchInput = document.getElementById('report-table-search');
 
-    // Configuration Management Elements
+    // Config Management Elements
     const configNameInput = document.getElementById('config-name');
     const saveConfigButton = document.getElementById('save-config-button');
     const savedConfigsDropdown = document.getElementById('saved-configs-dropdown');
@@ -29,225 +34,331 @@ document.addEventListener('DOMContentLoaded', () => {
     const scheduleConfigSelect = document.getElementById('schedule-config-select');
     const scheduleDateTimeInput = document.getElementById('schedule-datetime');
     const scheduleButton = document.getElementById('schedule-button');
-    const schedulesList = document.getElementById('schedules-list');
+    const schedulesListBody = document.getElementById('schedules-list');
+
+    // Log Elements
+    const logTableContainer = document.getElementById('log-table-container');
+    const logDataTableBody = document.querySelector("#log-data-table tbody");
+    const refreshLogButton = document.getElementById('refresh-log-button');
+    const logTableSearchInput = document.getElementById('log-table-search');
+    const totalCountSpan = document.getElementById('total-count');
+    const successCountSpan = document.getElementById('success-count');
+    const failedCountSpan = document.getElementById('failed-count');
+    const statusChartCtx = document.getElementById('status-chart')?.getContext('2d');
+
+    // Advanced Settings Elements
+    const otpSecretInput = document.getElementById('otp-secret');
+    const driverPathInput = document.getElementById('driver-path');
+    const downloadBasePathInput = document.getElementById('download-base-path');
+    const saveAdvancedSettingsButton = document.getElementById('save-advanced-settings');
+
+    // Bulk Email Elements
+    const bulkEmailForm = document.getElementById('bulk-email-form');
+    const sendEmailButton = document.getElementById('send-email-button');
+    const emailLoadingIndicator = document.getElementById('email-loading-indicator');
+    const emailStatusMessagesDiv = document.getElementById('email-status-messages');
+
+    // Debug DOM references
+    console.log({
+        sidebarLinks: sidebarLinks.length,
+        suggestionCards: suggestionCards.length,
+        form: !!form,
+        reportTableBody: !!reportTableBody,
+        addRowButton: !!addRowButton,
+        downloadButton: !!downloadButton,
+        savedConfigsDropdown: !!savedConfigsDropdown,
+        scheduleConfigSelect: !!scheduleConfigSelect
+    });
 
     // --- Global Variables ---
-    let reportDataCache = null; // Cache for report/region data (URLs, names, requirements)
-    let sseConnection = null; // Holds the active Server-Sent Events connection
-    let eventSource = null; // Holds the EventSource connection
-    let statusChart = null; // Chart.js instance for status chart
+    let reportDataCache = null;
+    let eventSource = null;
+    let statusChart = null;
+    let notificationTimeout = null;
 
     // --- Helper Functions ---
 
-    /**
-     * Adds a message to the status display area.
-     * @param {string} message - The message text.
-     * @param {boolean} [isError=false] - True if the message indicates an error.
-     * @param {boolean} [isSuccess=false] - True if the message indicates success.
-     */
-    function addStatusMessage(message, isError = false, isSuccess = false) {
-        if (!statusMessagesDiv) return; // Exit if element doesn't exist
+    function showNotification(message, type = 'info', duration = 4000) {
+        if (!notificationPopup || !notificationMessage) return;
+        if (notificationTimeout) clearTimeout(notificationTimeout);
+        notificationMessage.textContent = message;
+        notificationPopup.className = 'notification show';
+        if (type === 'success') {
+            notificationPopup.classList.add('success');
+        } else if (type === 'error') {
+            notificationPopup.classList.add('error');
+        } else if (type === 'warning') {
+            notificationPopup.classList.add('warning');
+        }
+        notificationTimeout = setTimeout(() => {
+            notificationPopup.classList.remove('show');
+        }, duration);
+    }
+
+    function hideNotification() {
+        if (notificationPopup) {
+            notificationPopup.classList.remove('show');
+            if (notificationTimeout) clearTimeout(notificationTimeout);
+        }
+    }
+
+    function addStatusMessage(targetDiv, message, type = 'log') {
+        if (!targetDiv) return;
         const p = document.createElement('p');
         p.textContent = message;
-        if (isError) {
-            p.style.color = 'red';
-            p.style.fontWeight = 'bold';
-        } else if (isSuccess) {
-             p.style.color = 'green';
-             p.style.fontWeight = 'bold';
+        p.classList.add(`${type}-message`);
+        const defaultMsg = targetDiv.querySelector('p.subtext');
+        if (defaultMsg && targetDiv.children.length === 1 && defaultMsg.textContent.includes('No activity yet')) {
+            targetDiv.innerHTML = '';
         }
-        // Clear default message if it exists
-        const defaultMsg = statusMessagesDiv.querySelector('p');
-        const defaultTexts = ['No activity yet.', 'Đang gửi yêu cầu tải xuống...']; // Add Vietnamese default text
-        if (defaultMsg && defaultTexts.includes(defaultMsg.textContent)) {
-            statusMessagesDiv.innerHTML = '';
-        }
-        statusMessagesDiv.appendChild(p);
-        // Auto-scroll to the bottom
-        statusMessagesDiv.scrollTop = statusMessagesDiv.scrollHeight;
+        targetDiv.appendChild(p);
+        targetDiv.scrollTop = targetDiv.scrollHeight;
     }
 
-    /**
-     * Performs a fetch request and handles common errors.
-     * @param {string} url - The URL to fetch.
-     * @param {object} [options={}] - Fetch options (method, headers, body, etc.).
-     * @returns {Promise<object>} - A promise resolving to the JSON response or a success indicator.
-     */
+    function clearStatusMessages(targetDiv) {
+        if (targetDiv) {
+            targetDiv.innerHTML = '<p class="subtext">No activity yet.</p>';
+        }
+    }
+
     async function fetchData(url, options = {}) {
         try {
+            console.log(`Sending request to ${url} with options:`, options);
             const response = await fetch(url, options);
+            console.log(`Response status for ${url}: ${response.status}`);
+            const responseData = await response.json();
             if (!response.ok) {
-                let errorMsg = `HTTP error! status: ${response.status} ${response.statusText}`;
-                try {
-                    // Try to get more specific error from backend JSON response
-                    const errorData = await response.json();
-                    errorMsg = errorData.message || errorMsg;
-                } catch (e) { /* Ignore if response body is not JSON */ }
-                throw new Error(errorMsg);
+                const errorMessage = responseData.message || responseData.error || `HTTP error ${response.status}`;
+                throw new Error(`${errorMessage} (URL: ${url})`);
             }
-            // Handle successful responses that might not have JSON content (e.g., DELETE)
-             const contentType = response.headers.get("content-type");
-             if (response.status === 204) { // No Content success
-                 return { status: 'success', message: 'Operation successful (No Content)' };
-             }
-             if (contentType && contentType.includes("application/json")) {
-                 return await response.json(); // Parse JSON if available
-             } else {
-                 // Return success indicator for other successful non-JSON responses
-                 return { status: 'success', message: await response.text() || 'Operation successful' };
-             }
+            console.log(`Data received from ${url}:`, responseData);
+            return responseData;
         } catch (error) {
-            console.error(`Error fetching ${url}:`, error);
-            // Display error to the user via status message
-            addStatusMessage(`API Error: ${error.message || 'Network error or server unavailable'}`, true);
-            throw error; // Re-throw for calling function to potentially handle
+            console.error(`Fetch error for ${url}:`, error);
+            const message = `Error fetching data from ${url}: ${error.message}`;
+            addStatusMessage(statusMessagesDiv, message, 'error');
+            showNotification(message, 'error');
+            throw error;
         }
     }
 
-    /**
-     * Populates a select dropdown with options.
-     * @param {HTMLSelectElement} selectElement - The select element to populate.
-     * @param {Array<string|object>} optionsList - Array of option values or objects {value, text}.
-     * @param {boolean} [includeDefault=true] - Whether to include a default "-- Select --" option.
-     * @param {string} [defaultText='-- Select --'] - Text for the default option.
-     */
-    function fillSelectOptions(selectElement, optionsList, includeDefault = true, defaultText = "-- Select --") {
+    function fillSelectOptions(selectElement, optionsList, includeDefault = true, defaultText = "-- Select --", defaultVal = "") {
         if (!selectElement) {
-            console.error("fillSelectOptions: Provided selectElement is invalid.");
+            console.error("Select element not found for filling options.");
             return;
         }
-        const currentValue = selectElement.value; // Preserve current value if possible
-        selectElement.innerHTML = ''; // Clear existing options
+        console.log(`Filling select options for ${selectElement.id || selectElement.name}:`, optionsList);
+        const currentValue = selectElement.value;
+        selectElement.innerHTML = '';
         if (includeDefault) {
             const defaultOption = document.createElement('option');
-            defaultOption.value = "";
-            defaultOption.textContent = defaultText; // Use parameter for text
+            defaultOption.value = defaultVal;
+            defaultOption.textContent = defaultText;
             selectElement.appendChild(defaultOption);
         }
         optionsList.forEach(optionValue => {
             const option = document.createElement('option');
-            // Handle both string options and {value, text} objects
             if (typeof optionValue === 'object' && optionValue !== null && optionValue.value !== undefined) {
-                 option.value = optionValue.value;
-                 option.textContent = optionValue.text || optionValue.value; // Fallback text
-            } else { // Assume string value
-                 option.value = String(optionValue); // Ensure value is string
-                 option.textContent = String(optionValue);
+                option.value = optionValue.value;
+                option.textContent = optionValue.text || optionValue.value;
+            } else {
+                option.value = String(optionValue);
+                option.textContent = String(optionValue);
             }
             selectElement.appendChild(option);
         });
-        // Try to restore the previously selected value if it still exists in the new list
         const exists = optionsList.some(opt => (typeof opt === 'object' ? opt.value : String(opt)) === currentValue);
         if (currentValue && exists) {
-             selectElement.value = currentValue;
+            selectElement.value = currentValue;
         } else if (!includeDefault && optionsList.length > 0) {
-            // If no default and previous value gone, select the first option
             selectElement.selectedIndex = 0;
         }
+        console.log(`Select ${selectElement.id || selectElement.name} populated with ${optionsList.length} options.`);
     }
 
-    /**
-     * Populates all report type dropdowns in the table.
-     * @param {Array<string>} reportNames - List of report names.
-     */
-     function populateAllReportDropdowns(reportNames) {
-        const selects = document.querySelectorAll("select[name='report_type[]']");
-        if (selects.length === 0) {
-            console.warn("No report type dropdowns found to populate.");
-            return;
-        }
-        selects.forEach(sel => {
-            const currentValue = sel.value;
-            fillSelectOptions(sel, reportNames, true, '-- Select Report --'); // Use specific default text
-            if (reportNames.includes(currentValue)) {
-                sel.value = currentValue;
-            }
-             // Attach change listener only once
-             if (!sel.dataset.listenerAttached) {
-                 sel.addEventListener('change', updateRegionSelectionVisibilityBasedOnAllRows);
-                 sel.dataset.listenerAttached = 'true';
-             }
-        });
-         // Update region visibility after populating all dropdowns
-         updateRegionSelectionVisibilityBasedOnAllRows();
-    }
-
-    /**
-     * Formats a Date object into YYYY-MM-DD string.
-     * @param {Date} date - The date object.
-     * @returns {string} - The formatted date string or empty string on error.
-     */
     function formatDate(date) {
-        if (!(date instanceof Date) || isNaN(date)) {
-             console.error("Invalid date passed to formatDate:", date);
-             return "";
-        }
+        if (!(date instanceof Date) || isNaN(date)) return "";
         try {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
+            return date.toISOString().split('T')[0];
         } catch (e) {
             console.error("Error formatting date:", e, date);
             return "";
         }
     }
 
-    /**
-     * Sets the default 'From' and 'To' dates for a given table row element.
-     * @param {HTMLTableRowElement} rowElement - The table row element.
-     */
     function setDefaultDates(rowElement) {
         if (!rowElement) return;
         const fromDateInput = rowElement.querySelector("input[name='from_date[]']");
         const toDateInput = rowElement.querySelector("input[name='to_date[]']");
         try {
-            // Use UTC dates internally then format to avoid timezone issues with input[type=date]
-            const now = new Date(); // Current date/time
-            const firstDayOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
-            const yesterday = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() -1));
-
-            if(fromDateInput) fromDateInput.value = formatDate(firstDayOfMonth);
-            if(toDateInput) toDateInput.value = formatDate(yesterday);
-        } catch(e) { console.error("Error setting default dates:", e); }
+            const now = new Date();
+            const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            if (fromDateInput) fromDateInput.value = formatDate(firstDayOfMonth);
+            if (toDateInput) toDateInput.value = formatDate(yesterday);
+        } catch (e) {
+            console.error("Error setting default dates:", e);
+        }
     }
 
+    function filterTable(inputElement, tableBodyElement) {
+        const filter = inputElement.value.toUpperCase();
+        const rows = tableBodyElement.getElementsByTagName('tr');
+        for (let i = 0; i < rows.length; i++) {
+            let visible = false;
+            const cells = rows[i].getElementsByTagName('td');
+            for (let j = 0; j < cells.length; j++) {
+                if (cells[j]) {
+                    const textValue = cells[j].textContent || cells[j].innerText;
+                    const inputs = cells[j].querySelectorAll('input, select');
+                    let controlValue = '';
+                    if (inputs.length > 0) {
+                        controlValue = inputs[0].value;
+                    }
+                    if (textValue.toUpperCase().indexOf(filter) > -1 || controlValue.toUpperCase().indexOf(filter) > -1) {
+                        visible = true;
+                        break;
+                    }
+                }
+            }
+            rows[i].style.display = visible ? '' : 'none';
+        }
+    }
 
-    // --- Report and Region Data Handling ---
+    // --- Navigation & Panel Switching ---
+    function switchPanel(targetId) {
+        console.log("Switching to panel:", targetId);
+        if (!targetId) return;
+        mainPanels.forEach(panel => panel.style.display = 'none');
+        sidebarLinks.forEach(link => link.classList.remove('active'));
+        const targetPanel = document.getElementById(targetId);
+        if (targetPanel) {
+            targetPanel.style.display = 'block';
+            const activeLink = document.querySelector(`#sidebar .sidebar-link[data-target="${targetId}"]`);
+            if (activeLink) {
+                activeLink.classList.add('active');
+                if (sectionTitleElement && activeLink.querySelector('span')) {
+                    sectionTitleElement.textContent = activeLink.querySelector('span').textContent;
+                }
+            }
+            if (document.getElementById('main-content')) {
+                document.getElementById('main-content').scrollTop = 0;
+            }
+            if (targetId === 'log-panel') {
+                fetchLogs();
+            }
+            if (targetId === 'scheduling-panel') {
+                fetchAndPopulateConfigs(); // Load configs for scheduling
+                fetchAndDisplaySchedules();
+            }
+            if (targetId === 'main-download-panel') {
+                fetchAndPopulateReportData();
+                fetchAndPopulateConfigs(); // Load configs for download panel
+            }
+        } else {
+            console.warn(`Panel with ID "${targetId}" not found.`);
+            document.getElementById('main-download-panel').style.display = 'block';
+            const defaultLink = document.querySelector(`#sidebar .sidebar-link[data-target="main-download-panel"]`);
+            if (defaultLink) defaultLink.classList.add('active');
+            if (sectionTitleElement && defaultLink.querySelector('span')) {
+                sectionTitleElement.textContent = defaultLink.querySelector('span').textContent;
+            }
+            fetchAndPopulateReportData();
+            fetchAndPopulateConfigs();
+        }
+    }
 
-    /** Fetches report/region data and populates initial UI elements. */
+    sidebarLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = link.getAttribute('data-target');
+            console.log("Sidebar link clicked, target:", targetId);
+            switchPanel(targetId);
+        });
+    });
+
+    suggestionCards.forEach(card => {
+        card.addEventListener('click', (e) => {
+            if (e.target.classList.contains('card-button')) {
+                e.preventDefault();
+            }
+            const targetId = card.getAttribute('data-target');
+            console.log("Suggestion card clicked, target:", targetId);
+            switchPanel(targetId);
+            const targetPanel = document.getElementById(targetId);
+            if (targetPanel) {
+                targetPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
+
+    // --- Report/Region Data ---
     async function fetchAndPopulateReportData() {
+        console.log("Fetching report data from /get-reports-regions...");
+        if (reportTableBody) {
+            reportTableBody.innerHTML = '<tr><td colspan="5" class="subtext">Loading reports...</td></tr>';
+        }
         try {
             const data = await fetchData('/get-reports-regions');
-            if (data && data.reports) { // Check if data and reports exist
-                reportDataCache = data; // Store fetched data
+            console.log("Report data received:", data);
+            if (data && Array.isArray(data.reports) && data.reports.length > 0) {
+                reportDataCache = data;
                 populateAllReportDropdowns(data.reports);
-                // Set default dates for the initial row *after* reports are loaded
-                const initialRow = reportTableBody?.querySelector("tr"); // Use optional chaining
-                if (initialRow) {
-                    setDefaultDates(initialRow);
+                const initialRow = reportTableBody?.querySelector("tr");
+                if (initialRow) setDefaultDates(initialRow);
+                console.log("Report dropdowns populated successfully.");
+                if (reportTableBody) {
+                    reportTableBody.innerHTML = '';
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><select name="report_type[]" class="report-type-select" required></select></td>
+                        <td><input type="date" name="from_date[]" required></td>
+                        <td><input type="date" name="to_date[]" required></td>
+                        <td><input type="text" name="chunk_size[]" value="5" placeholder="E.g.: 5 or month"></td>
+                        <td><button type="button" class="remove-row-button" title="Remove this report row"><i class="fas fa-trash-alt"></i></button></td>
+                    `;
+                    reportTableBody.appendChild(row);
+                    populateAllReportDropdowns(data.reports);
                 }
             } else {
-                 addStatusMessage("Error: Could not parse report data from backend.", true);
+                throw new Error("No reports found in response or invalid data structure.");
             }
         } catch (error) {
-            addStatusMessage("Error loading report list from backend. Check console.", true);
-            // No need to log error again, fetchData does it
+            console.error("Failed to load reports:", error);
+            if (reportTableBody) {
+                reportTableBody.innerHTML = `<tr><td colspan="5" class="error-message">Failed to load reports: ${error.message}</td></tr>`;
+            }
+            addStatusMessage(statusMessagesDiv, `Error loading reports: ${error.message}`, 'error');
         }
     }
 
-    /** Updates the visibility and content of the region selection div based on all selected reports. */
-    function updateRegionSelectionVisibilityBasedOnAllRows() {
-        if (!reportDataCache || !regionSelectionDiv) { // Check elements exist
-            // console.warn("Skipping region update: Cache or element not ready.");
+    function populateAllReportDropdowns(reportNames) {
+        console.log("Populating report dropdowns with:", reportNames);
+        const selects = document.querySelectorAll("select[name='report_type[]']");
+        console.log("Found report select elements:", selects.length);
+        if (selects.length === 0) {
+            console.warn("No report select elements found in DOM.");
             return;
         }
+        selects.forEach(sel => {
+            const currentValue = sel.value;
+            fillSelectOptions(sel, reportNames, true, '-- Select Report --');
+            if (reportNames.includes(currentValue)) sel.value = currentValue;
+            if (!sel.dataset.listenerAttached) {
+                sel.addEventListener('change', updateRegionSelectionVisibilityBasedOnAllRows);
+                sel.dataset.listenerAttached = 'true';
+            }
+        });
+        updateRegionSelectionVisibilityBasedOnAllRows();
+    }
 
+    function updateRegionSelectionVisibilityBasedOnAllRows() {
+        if (!reportDataCache || !regionSelectionDiv) return;
         const reportSelects = document.querySelectorAll("select[name='report_type[]']");
         let requiresRegion = false;
         reportSelects.forEach(select => {
             const selectedReportKey = select.value;
-            if (selectedReportKey && reportDataCache.report_urls_map && reportDataCache.region_required_urls) {
+            if (selectedReportKey && reportDataCache.report_urls_map && reportDataCache.region_required_urls && reportDataCache.regions) {
                 const reportUrl = reportDataCache.report_urls_map[selectedReportKey];
                 if (reportDataCache.region_required_urls.includes(reportUrl)) {
                     requiresRegion = true;
@@ -255,16 +366,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Always clear previous content
         regionSelectionDiv.innerHTML = '';
-
         if (requiresRegion) {
             regionSelectionDiv.style.display = 'block';
-            const label = document.createElement('label');
-            label.textContent = 'Select Region(s) (for required reports):'; // Use English
-            regionSelectionDiv.appendChild(label);
+            const mainLabel = document.createElement('label');
+            mainLabel.textContent = 'Select Region(s) (required for some reports):';
+            regionSelectionDiv.appendChild(mainLabel);
             regionSelectionDiv.appendChild(document.createElement('br'));
-
             if (reportDataCache.regions && Object.keys(reportDataCache.regions).length > 0) {
                 for (const [index, name] of Object.entries(reportDataCache.regions)) {
                     const checkboxId = `region-${index}`;
@@ -272,569 +380,552 @@ document.addEventListener('DOMContentLoaded', () => {
                     checkbox.type = 'checkbox';
                     checkbox.id = checkboxId;
                     checkbox.name = 'regions';
-                    checkbox.value = index; // Value is the index (string)
-
+                    checkbox.value = index;
                     const checkLabel = document.createElement('label');
                     checkLabel.htmlFor = checkboxId;
-                    checkLabel.textContent = name; // Display region name
-
-                    const div = document.createElement('div'); // Wrap checkbox and label for styling/spacing
+                    checkLabel.textContent = name;
+                    const div = document.createElement('div');
                     div.appendChild(checkbox);
                     div.appendChild(checkLabel);
                     regionSelectionDiv.appendChild(div);
                 }
             } else {
-                 regionSelectionDiv.innerHTML += '<p>No region data available.</p>';
+                regionSelectionDiv.innerHTML += '<p class="subtext">No region data available.</p>';
             }
         } else {
-            regionSelectionDiv.style.display = 'none'; // Hide if no selected report requires regions
+            regionSelectionDiv.style.display = 'none';
         }
     }
 
+    if (addRowButton && reportTableBody) {
+        addRowButton.addEventListener("click", () => {
+            console.log("Add report row clicked");
+            const firstRow = reportTableBody.querySelector("tr");
+            if (!firstRow) {
+                console.error("Cannot add row: Template row not found.");
+                return;
+            }
+            const newRow = firstRow.cloneNode(true);
+            const reportSelect = newRow.querySelector("select[name='report_type[]']");
+            const chunkSizeInput = newRow.querySelector("input[name='chunk_size[]']");
+            if (reportSelect) {
+                reportSelect.selectedIndex = 0;
+                if (!reportSelect.dataset.listenerAttached) {
+                    reportSelect.addEventListener('change', updateRegionSelectionVisibilityBasedOnAllRows);
+                    reportSelect.dataset.listenerAttached = 'true';
+                }
+            }
+            setDefaultDates(newRow);
+            if (chunkSizeInput) chunkSizeInput.value = "5";
+            reportTableBody.appendChild(newRow);
+            updateRegionSelectionVisibilityBasedOnAllRows();
+            console.log("Report row added.");
+        });
+    }
+
+    if (reportTable) {
+        reportTable.addEventListener("click", (event) => {
+            if (event.target.closest(".remove-row-button")) {
+                console.log("Remove row clicked");
+                const row = event.target.closest("tr");
+                if (reportTableBody && reportTableBody.querySelectorAll("tr").length > 1) {
+                    row.remove();
+                    updateRegionSelectionVisibilityBasedOnAllRows();
+                    console.log("Report row removed.");
+                } else {
+                    showNotification("Cannot remove the last report row.", "warning");
+                }
+            }
+        });
+    }
+
     // --- Download Logic ---
+    function getCurrentFormData() {
+        const configData = {
+            email: emailInput ? emailInput.value : '',
+            password: passwordInput ? passwordInput.value : '',
+            reports: [],
+            regions: [],
+            otp_secret: otpSecretInput ? otpSecretInput.value : '',
+            driver_path: driverPathInput ? driverPathInput.value : '',
+            download_base_path: downloadBasePathInput ? downloadBasePathInput.value : ''
+        };
 
-    /** Handles the submission of the main download form. */
-    async function handleDownloadFormSubmit(event) {
-        event.preventDefault(); // Prevent default HTML form submission
-        if (!form) { addStatusMessage("Error: Download form not found!", true); return; }
-
-        // Close any previous SSE connection
-        if (sseConnection) {
-            sseConnection.close();
-            console.log("Closed previous SSE connection.");
-            sseConnection = null; // Reset variable
+        if (reportTableBody) {
+            const reportRows = reportTableBody.querySelectorAll('tr');
+            reportRows.forEach(row => {
+                const reportTypeSelect = row.querySelector('select[name="report_type[]"]');
+                const fromDateInput = row.querySelector('input[name="from_date[]"]');
+                const toDateInput = row.querySelector('input[name="to_date[]"]');
+                const chunkSizeInput = row.querySelector('input[name="chunk_size[]"]');
+                if (reportTypeSelect && reportTypeSelect.value) {
+                    configData.reports.push({
+                        report_type: reportTypeSelect.value,
+                        from_date: fromDateInput ? fromDateInput.value : '',
+                        to_date: toDateInput ? toDateInput.value : '',
+                        chunk_size: chunkSizeInput ? (chunkSizeInput.value.trim() || '5') : '5',
+                    });
+                }
+            });
         }
 
-        // Disable button, show indicator, clear status
+        if (regionSelectionDiv && regionSelectionDiv.style.display === 'block') {
+            const selectedRegionCheckboxes = regionSelectionDiv.querySelectorAll('input[name="regions"]:checked');
+            configData.regions = Array.from(selectedRegionCheckboxes).map(cb => cb.value);
+        }
+        return configData;
+    }
+
+    async function handleDownloadFormSubmit(event) {
+        event.preventDefault();
+        console.log("Download form submitted");
+        if (!form || !downloadButton || !loadingIndicator || !statusMessagesDiv) return;
+
+        if (eventSource) eventSource.close();
         downloadButton.disabled = true;
-        loadingIndicator.style.display = 'inline';
-        statusMessagesDiv.innerHTML = ''; // Clear previous status messages
-        addStatusMessage("Sending download request..."); // Initial feedback
+        loadingIndicator.style.display = 'inline-block';
+        clearStatusMessages(statusMessagesDiv);
+        addStatusMessage(statusMessagesDiv, "Initiating download request...", 'info');
 
-        // Get data using helper function
         const currentData = getCurrentFormData();
-
-        // --- Frontend Validation ---
         let validationError = false;
         if (!currentData.email || !currentData.password) {
-             addStatusMessage("Error: Please enter Email and Password.", true);
-             validationError = true;
-        }
-        if (!currentData.reports || currentData.reports.length === 0) {
-            addStatusMessage("Error: Please configure at least one valid report.", true);
+            addStatusMessage(statusMessagesDiv, "Error: Please enter Email and Password.", 'error');
             validationError = true;
         }
-        // Check if any configured report requires region selection
+        if (!currentData.reports || currentData.reports.length === 0) {
+            addStatusMessage(statusMessagesDiv, "Error: Please configure at least one valid report.", 'error');
+            validationError = true;
+        }
         let requiresRegion = false;
         if (reportDataCache && currentData.reports) {
-             requiresRegion = currentData.reports.some(report => {
-                 const reportUrl = reportDataCache.report_urls_map[report.report_type];
-                 return reportDataCache.region_required_urls.includes(reportUrl);
-             });
+            requiresRegion = currentData.reports.some(report => {
+                const reportUrl = reportDataCache.report_urls_map?.[report.report_type];
+                return reportUrl && reportDataCache.region_required_urls?.includes(reportUrl);
+            });
         }
-        // If region is required but none selected
         if (requiresRegion && currentData.regions.length === 0) {
-            addStatusMessage("Error: The selected report(s) require at least one region to be selected.", true);
+            addStatusMessage(statusMessagesDiv, "Error: Selected report(s) require region selection.", 'error');
             validationError = true;
         }
 
         if (validationError) {
             downloadButton.disabled = false;
             loadingIndicator.style.display = 'none';
-            return; // Stop submission
+            showNotification("Please fix the errors in the form.", "error");
+            return;
         }
-        // --- End Validation ---
 
         try {
-            // Backend expects 'reports' as an array of objects, not flat lists
-            const dataToSend = {
-                email: currentData.email,
-                password: currentData.password,
-                otp_secret: document.getElementById('otp-secret')?.value || '',
-                driver_path: document.getElementById('driver-path')?.value || '',
-                download_base_path: document.getElementById('download-base-path')?.value || '',
-                reports: currentData.reports, // Array of objects
-                regions: currentData.regions // Already a list of strings (indices)
-            };
-
-            console.log("Data sending to /start-download:", JSON.stringify(dataToSend));
-
-            // Send request using fetchData
             const result = await fetchData('/start-download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(dataToSend),
+                body: JSON.stringify(currentData),
             });
 
-            // Check backend response status
             if (result && result.status === 'started') {
-                addStatusMessage("Request accepted. Waiting for status updates...");
-                setupEventSource(); // Start listening for updates
+                addStatusMessage(statusMessagesDiv, "Request accepted. Waiting for status updates...", 'info');
+                setupEventSource();
             } else {
-                // Error message should have been shown by fetchData
                 downloadButton.disabled = false;
                 loadingIndicator.style.display = 'none';
             }
         } catch (error) {
-            // Network or other fetch errors handled by fetchData
             downloadButton.disabled = false;
             loadingIndicator.style.display = 'none';
         }
-     }
-
-    // --- Advanced Settings Toggle ---
-    const toggleBtn = document.getElementById('toggle-advanced-settings');
-    const advSettings = document.getElementById('advanced-settings');
-    if (toggleBtn && advSettings) {
-        toggleBtn.addEventListener('click', () => {
-            const icon = toggleBtn.querySelector('.toggle-icon');
-            if (advSettings.style.display === 'none') {
-                advSettings.style.display = 'block';
-                if (icon) icon.classList.replace('fa-chevron-down', 'fa-chevron-up');
-            } else {
-                advSettings.style.display = 'none';
-                if (icon) icon.classList.replace('fa-chevron-up', 'fa-chevron-down');
-            }
-        });
     }
 
-    /** Initializes the Server-Sent Events (SSE) connection for status updates. */
     function setupEventSource() {
-        if (eventSource) {
-            eventSource.close();
-        }
-
+        if (eventSource) eventSource.close();
+        console.log("Setting up SSE connection to /stream-status");
         eventSource = new EventSource('/stream-status');
-        
-        // Tăng timeout cho EventSource connection
-        const keepAliveTimeout = 3600000; // 1 hour
-        let lastEventTime = Date.now();
-        
-        const keepAliveTimer = setInterval(() => {
-            if (Date.now() - lastEventTime > keepAliveTimeout) {
-                console.log('SSE connection timeout. Reconnecting...');
-                eventSource.close();
-                setupEventSource(); // Reconnect
-            }
-        }, 30000); // Check every 30 seconds
+
+        eventSource.onopen = function() {
+            console.log("SSE connection opened.");
+            addStatusMessage(statusMessagesDiv, "Connected to status stream.", 'info');
+        };
 
         eventSource.onmessage = function(event) {
-            lastEventTime = Date.now(); // Update last event time
             const message = event.data;
-            // Check for the special FINISHED signal
+            console.log("SSE message received:", message);
             if (message === "FINISHED") {
-                addStatusMessage("--- PROCESS COMPLETED ---", false, true);
-                if (eventSource) eventSource.close(); // Close connection
-                eventSource = null; // Reset variable
-                downloadButton.disabled = false; // Re-enable button
+                addStatusMessage(statusMessagesDiv, "--- PROCESS COMPLETED ---", 'success');
+                if (eventSource) eventSource.close();
+                eventSource = null;
+                downloadButton.disabled = false;
                 loadingIndicator.style.display = 'none';
-                fetchLogs(); // Refresh logs automatically when finished
+                fetchLogs();
+                showNotification("Download process finished.", "success");
+            } else if (message.startsWith("ERROR:")) {
+                addStatusMessage(statusMessagesDiv, message, 'error');
             } else {
-                addStatusMessage(message); // Display the regular status message
+                addStatusMessage(statusMessagesDiv, message);
             }
         };
 
         eventSource.onerror = function(error) {
             console.error('SSE Error:', error);
-            setTimeout(() => {
-                console.log('Attempting to reconnect...');
-                setupEventSource();
-            }, 5000); // Wait 5 seconds before reconnecting
+            addStatusMessage(statusMessagesDiv, "Status stream connection error. Attempting to reconnect...", 'error');
+            if (eventSource) eventSource.close();
+            eventSource = null;
+            downloadButton.disabled = false;
+            loadingIndicator.style.display = 'none';
         };
     }
 
     // --- Log Handling ---
-
-    /** Fetches download logs from the backend and displays them. */
     async function fetchLogs() {
-        if (!logTableContainer) return;
-        logTableContainer.innerHTML = '<p>Loading logs...</p>';
+        if (!logDataTableBody || !logTableContainer) return;
+        logDataTableBody.innerHTML = '<tr><td colspan="7" class="subtext">Loading logs...</td></tr>';
         try {
             const data = await fetchData('/get-logs');
-             logTableContainer.innerHTML = ''; // Clear loading message
-             if (data.status === 'success' && data.logs && data.logs.length > 0) {
-                 createLogTable(data.logs);
-             } else {
-                 // Display message from backend or default 'no logs' message
-                 logTableContainer.innerHTML = `<p>${data.message || 'No log entries found.'}</p>`;
-             }
+            logDataTableBody.innerHTML = '';
+            if (data && data.logs && Array.isArray(data.logs)) {
+                if (data.logs.length > 0) {
+                    createLogTable(data.logs);
+                    console.log("Logs loaded and table populated.");
+                } else {
+                    logDataTableBody.innerHTML = '<tr><td colspan="7" class="subtext">No log entries found.</td></tr>';
+                }
+            } else {
+                throw new Error("Invalid log data structure received.");
+            }
         } catch (error) {
-             // fetchData already showed API error message
-             logTableContainer.innerHTML = `<p style="color: red;">Failed to load logs.</p>`;
+            logDataTableBody.innerHTML = `<tr><td colspan="7" class="error-message">Failed to load logs: ${error.message}</td></tr>`;
         }
     }
 
-    /**
-     * Creates and populates the log table in the UI.
-     * @param {Array<object>} logData - Array of log entry objects.
-     */
     function createLogTable(logData) {
-        if (!logTableContainer || !Array.isArray(logData) || logData.length === 0) return;
-        // Sort entries by Timestamp descending
+        if (!logDataTableBody) return;
+        logDataTableBody.innerHTML = '';
         logData.sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
-        // Use fixed column order
-        const headers = ['SessionID','Timestamp','File Name','Start Date','End Date','Status','Error Message'];
-        const table = document.createElement('table');
-        table.className = 'log-table'; // For styling
+        const headers = ['SessionID', 'Timestamp', 'File Name', 'Start Date', 'End Date', 'Status', 'Error Message'];
 
-        // Create table header
-        const thead = table.createTHead();
-        const headerRow = thead.insertRow();
-        headers.forEach(headerText => {
-            const th = document.createElement('th');
-            th.textContent = headerText; // Display header text
-            headerRow.appendChild(th);
-        });
-
-        // Create table body
-        const tbody = table.createTBody();
         logData.forEach(logEntry => {
-            const row = tbody.insertRow();
+            const row = logDataTableBody.insertRow();
             headers.forEach(header => {
                 const cell = row.insertCell();
                 const value = logEntry[header];
-                cell.textContent = (value === null || value === undefined) ? '' : String(value);
+                cell.textContent = (value === null || value === undefined) ? '-' : String(value);
+                if (header === 'Status') {
+                    if (typeof value === 'string') {
+                        if (value.toLowerCase().startsWith('success')) {
+                            cell.classList.add('status-success');
+                        } else if (value.toLowerCase().startsWith('fail')) {
+                            cell.classList.add('status-failed');
+                        }
+                    }
+                }
+                if (header === 'Error Message' && value && String(value).length < 50) {
+                    cell.classList.add('subtext');
+                } else if (header === 'Error Message') {
+                    cell.style.fontSize = '12px';
+                }
             });
         });
-
-        // Clear container and append table
-        logTableContainer.innerHTML = '';
-        logTableContainer.appendChild(table);
-        // Update summary counts and chart
         updateSummaryAndChart(logData);
     }
 
-    /**
-     * Computes totals and renders the status chart
-     * @param {Array<Object>} logData
-     */
     function updateSummaryAndChart(logData) {
         const total = logData.length;
-        const successCount = logData.filter(e => e['Status'] && e['Status'].toLowerCase().startsWith('success')).length;
+        const successCount = logData.filter(e => e['Status'] && String(e['Status']).toLowerCase().startsWith('success')).length;
         const failedCount = total - successCount;
-        document.getElementById('total-count').textContent = total;
-        document.getElementById('success-count').textContent = successCount;
-        document.getElementById('failed-count').textContent = failedCount;
-        const ctx = document.getElementById('status-chart').getContext('2d');
-        if (statusChart) statusChart.destroy();
-        statusChart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Success', 'Failed'],
-                datasets: [{ data: [successCount, failedCount], backgroundColor: ['#28a745', '#dc3545'] }]
-            },
-            options: { responsive: true, maintainAspectRatio: false }
-        });
+
+        if (totalCountSpan) totalCountSpan.textContent = total;
+        if (successCountSpan) successCountSpan.textContent = successCount;
+        if (failedCountSpan) failedCountSpan.textContent = failedCount;
+
+        if (statusChartCtx) {
+            if (statusChart) statusChart.destroy();
+            if (total > 0) {
+                statusChart = new Chart(statusChartCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Success', 'Failed'],
+                        datasets: [{
+                            data: [successCount, failedCount],
+                            backgroundColor: ['#198754', '#dc3545'],
+                            borderColor: '#ffffff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) { label += ': '; }
+                                        if (context.parsed !== null) {
+                                            label += context.parsed;
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        },
+                        cutout: '65%'
+                    }
+                });
+            } else {
+                statusChartCtx.clearRect(0, 0, statusChartCtx.canvas.width, statusChartCtx.canvas.height);
+            }
+        } else {
+            console.warn("Status chart canvas context not found.");
+        }
     }
 
-    // --- Configuration Management Logic ---
-
-    /** Fetches saved config names and populates relevant dropdowns. */
+    // --- Configuration Management ---
     async function fetchAndPopulateConfigs() {
+        console.log("Fetching configurations from /get-configs...");
         try {
             const data = await fetchData('/get-configs');
-            if (data.status === 'success') {
-                const configNames = data.configs || [];
-                // Populate both dropdowns
-                fillSelectOptions(savedConfigsDropdown, configNames, true, '-- Select Configuration --');
-                fillSelectOptions(scheduleConfigSelect, configNames, true, '-- Select Config to Schedule --');
+            console.log("Config data received:", data);
+            if (data && data.status === 'success' && Array.isArray(data.configs)) {
+                const configNames = data.configs;
+                console.log("Populating config dropdowns with:", configNames);
+                if (savedConfigsDropdown) {
+                    fillSelectOptions(savedConfigsDropdown, configNames, true, '-- Select Configuration --');
+                }
+                if (scheduleConfigSelect) {
+                    fillSelectOptions(scheduleConfigSelect, configNames, true, '-- Select Config to Schedule --');
+                }
+                console.log("Configurations populated successfully.");
+                if (configNames.length === 0) {
+                    showNotification("No saved configurations found.", "warning");
+                }
             } else {
-                 addStatusMessage(data.message || "Error loading configuration list.", true);
+                throw new Error(data.message || "Invalid config data structure received.");
             }
-        } catch (error) { /* Error handled by fetchData */ }
-     }
-
-    /**
-     * Gets the current state of the download form as a structured object.
-     * @returns {object} - The configuration data object.
-     */
-    function getCurrentFormData() {
-         const formData = new FormData(form); // Gets email/password easily
-         const reportRows = reportTableBody.querySelectorAll('tr');
-         const configData = {
-             email: formData.get('email'),
-             password: formData.get('password'), // WARNING: Storing password insecurely
-             reports: [], // Array of report config objects
-             regions: [] // Array of selected region indices (strings)
-         };
-
-         reportRows.forEach(row => {
-             const reportTypeSelect = row.querySelector('select[name="report_type[]"]');
-             const fromDateInput = row.querySelector('input[name="from_date[]"]');
-             const toDateInput = row.querySelector('input[name="to_date[]"]');
-             const chunkSizeInput = row.querySelector('input[name="chunk_size[]"]');
-
-             // Only include row if a valid report type is selected
-             if (reportTypeSelect && reportTypeSelect.value) {
-                 configData.reports.push({
-                     report_type: reportTypeSelect.value,
-                     from_date: fromDateInput ? fromDateInput.value : '',
-                     to_date: toDateInput ? toDateInput.value : '',
-                     chunk_size: chunkSizeInput ? (chunkSizeInput.value.trim() || '5') : '5', // Default 5 if empty
-                 });
-             }
-         });
-
-         // Get selected regions if the section is visible
-         if (regionSelectionDiv && regionSelectionDiv.style.display === 'block') {
-             const selectedRegionCheckboxes = regionSelectionDiv.querySelectorAll('input[name="regions"]:checked');
-             // Store values (which are the indices as strings)
-             configData.regions = Array.from(selectedRegionCheckboxes).map(cb => cb.value);
-         }
-
-         // console.log("Generated current form data:", configData); // For debugging
-         return configData;
+        } catch (error) {
+            console.error("Failed to load configurations:", error);
+            if (savedConfigsDropdown) {
+                savedConfigsDropdown.innerHTML = '<option value="">-- Select Configuration --</option><option value="" disabled>Failed to load configs</option>';
+            }
+            if (scheduleConfigSelect) {
+                scheduleConfigSelect.innerHTML = '<option value="">-- Select Config to Schedule --</option><option value="" disabled>Failed to load configs</option>';
+            }
+            addStatusMessage(statusMessagesDiv, `Error loading configurations: ${error.message}`, 'error');
+        }
     }
 
-    /**
-     * Applies a loaded configuration object to the download form UI.
-     * @param {object} configData - The configuration data object.
-     */
     function applyConfiguration(configData) {
-        // console.log("Applying configuration:", configData); // For debugging
         if (!configData || typeof configData !== 'object') {
-            console.error("applyConfiguration received invalid configData:", configData);
-            addStatusMessage("Error: Invalid configuration data received.", true);
+            showNotification("Invalid configuration data.", "error");
             return;
         }
-
-        // Set email and password
+        console.log("Applying configuration:", configData);
         if (emailInput) emailInput.value = configData.email || '';
-        if (passwordInput) passwordInput.value = configData.password || ''; // WARNING: Password handling
+        if (passwordInput) passwordInput.value = configData.password || '';
+        if (otpSecretInput && configData.otp_secret !== undefined) otpSecretInput.value = configData.otp_secret;
+        if (driverPathInput && configData.driver_path !== undefined) driverPathInput.value = configData.driver_path;
+        if (downloadBasePathInput && configData.download_base_path !== undefined) downloadBasePathInput.value = configData.download_base_path;
 
-        // Ensure reportTableBody exists
-        if (!reportTableBody) {
-            console.error("Cannot apply configuration: Report table body not found.");
-            return;
-        }
-
-        // Clear existing rows except the first (template) row
-        while (reportTableBody.rows.length > 1) {
-            reportTableBody.deleteRow(1); // Delete second row repeatedly
-        }
+        if (!reportTableBody) return;
+        while (reportTableBody.rows.length > 1) reportTableBody.deleteRow(1);
         const firstRow = reportTableBody.rows[0];
-        if (!firstRow) {
-            console.error("Cannot apply configuration: Template row not found.");
-            // Potentially recreate the first row if necessary
-            return;
-        }
+        if (!firstRow) return;
 
-        // Reset the first row's content
         const firstSelect = firstRow.querySelector('select[name="report_type[]"]');
-        const firstFromDate = firstRow.querySelector('input[name="from_date[]"]');
-        const firstToDate = firstRow.querySelector('input[name="to_date[]"]');
         const firstChunk = firstRow.querySelector('input[name="chunk_size[]"]');
-        if(firstSelect) firstSelect.value = '';
-        setDefaultDates(firstRow); // Set default dates on reset
-        if(firstChunk) firstChunk.value = '5';
+        if (firstSelect) firstSelect.value = '';
+        setDefaultDates(firstRow);
+        if (firstChunk) firstChunk.value = '5';
 
-        // Apply report data from the loaded configuration
         if (configData.reports && Array.isArray(configData.reports) && configData.reports.length > 0) {
             configData.reports.forEach((reportInfo, index) => {
                 let targetRow;
                 if (index === 0) {
-                    targetRow = firstRow; // Use the reset first row
+                    targetRow = firstRow;
                 } else {
-                    targetRow = firstRow.cloneNode(true); // Clone the *original* template row
-                    reportTableBody.appendChild(targetRow); // Add new row to table
-                    // Reset dates for the cloned row (it inherits template values initially)
-                    setDefaultDates(targetRow);
-                    // Add listener to the new select
+                    targetRow = firstRow.cloneNode(true);
+                    reportTableBody.appendChild(targetRow);
                     const newSelect = targetRow.querySelector("select[name='report_type[]']");
-                     if (newSelect && !newSelect.dataset.listenerAttached) {
-                         newSelect.addEventListener('change', updateRegionSelectionVisibilityBasedOnAllRows);
-                         newSelect.dataset.listenerAttached = 'true';
-                     }
+                    if (newSelect && !newSelect.dataset.listenerAttached) {
+                        newSelect.addEventListener('change', updateRegionSelectionVisibilityBasedOnAllRows);
+                        newSelect.dataset.listenerAttached = 'true';
+                    }
+                    setDefaultDates(targetRow);
                 }
-
-                // Populate the target row
                 const typeSelect = targetRow.querySelector('select[name="report_type[]"]');
                 const fromInput = targetRow.querySelector('input[name="from_date[]"]');
                 const toInput = targetRow.querySelector('input[name="to_date[]"]');
                 const chunkInput = targetRow.querySelector('input[name="chunk_size[]"]');
-
                 if (typeSelect) typeSelect.value = reportInfo.report_type || '';
                 if (fromInput) fromInput.value = reportInfo.from_date || '';
                 if (toInput) toInput.value = reportInfo.to_date || '';
                 if (chunkInput) chunkInput.value = reportInfo.chunk_size || '5';
             });
-        } else {
-             console.log("Loaded configuration has no reports.");
-             // Ensure first row remains reset/empty
         }
 
-        // Update region visibility based on the newly applied report types
         updateRegionSelectionVisibilityBasedOnAllRows();
-
-        // Apply saved region selections (needs slight delay for DOM update)
         setTimeout(() => {
             if (regionSelectionDiv && regionSelectionDiv.style.display === 'block') {
-                 if (configData.regions && Array.isArray(configData.regions)) {
-                     const regionCheckboxes = regionSelectionDiv.querySelectorAll('input[name="regions"]');
-                     regionCheckboxes.forEach(checkbox => {
-                         // Check if checkbox value (string index) exists in the loaded regions array
-                         checkbox.checked = configData.regions.includes(checkbox.value);
-                     });
-                     console.log("Applied saved regions:", configData.regions);
-                 }
+                if (configData.regions && Array.isArray(configData.regions)) {
+                    const regionCheckboxes = regionSelectionDiv.querySelectorAll('input[name="regions"]');
+                    regionCheckboxes.forEach(checkbox => {
+                        checkbox.checked = configData.regions.includes(checkbox.value);
+                    });
+                    console.log("Applied saved regions:", configData.regions);
+                }
             }
-        }, 100); // 100ms delay
-
-        addStatusMessage("Configuration loaded successfully.", false, true);
+        }, 50);
+        showNotification("Configuration loaded successfully.", "success");
     }
 
     // --- Scheduling Logic ---
-
-    /** Fetches and displays the list of active schedules. */
     async function fetchAndDisplaySchedules() {
-        if (!schedulesList) return; // Element check
-        schedulesList.innerHTML = '<li>Loading schedules...</li>';
+        if (!schedulesListBody) return;
+        schedulesListBody.innerHTML = '<tr><td colspan="3" class="subtext">Loading schedules...</td></tr>';
         try {
             const data = await fetchData('/get-schedules');
-            schedulesList.innerHTML = ''; // Clear loading/previous list
-            if (data.status === 'success' && data.schedules && data.schedules.length > 0) {
+            schedulesListBody.innerHTML = '';
+            if (data && data.status === 'success' && data.schedules && data.schedules.length > 0) {
                 data.schedules.forEach(job => {
-                    const li = document.createElement('li');
-
-                    // Format next run time (assuming ISO string from backend)
+                    const row = schedulesListBody.insertRow();
                     let nextRunText = 'N/A';
                     if (job.next_run_time) {
                         try {
-                            // Display in local time using browser's locale
-                            nextRunText = new Date(job.next_run_time).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+                            nextRunText = new Date(job.next_run_time).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
                         } catch (e) {
-                            console.warn("Could not format next_run_time:", job.next_run_time, e);
-                            nextRunText = job.next_run_time; // Fallback to ISO string
+                            nextRunText = job.next_run_time;
                         }
                     }
-
-                    // Create text span with job info
-                    const textSpan = document.createElement('span');
-                    // Display config name from job args
                     const configArg = job.args && job.args.length > 0 ? job.args[0] : 'Unknown Config';
-                    textSpan.textContent = `Config: "${configArg}" - Next Run: ${nextRunText}`;
-                    textSpan.className = 'schedule-info'; // Add class for styling
-
-                    // Create cancel button
+                    const cellConfig = row.insertCell();
+                    cellConfig.textContent = configArg;
+                    cellConfig.className = 'schedule-config-name';
+                    const cellTime = row.insertCell();
+                    cellTime.textContent = nextRunText;
+                    cellTime.className = 'schedule-time';
+                    const cellAction = row.insertCell();
                     const cancelButton = document.createElement('button');
-                    cancelButton.textContent = 'Cancel';
-                    cancelButton.className = 'delete-button cancel-schedule-button'; // Use classes for styling/selection
-                    cancelButton.dataset.jobId = job.id; // Store job ID for cancellation
+                    cancelButton.innerHTML = '<i class="fas fa-times"></i> Cancel';
+                    cancelButton.className = 'cancel-schedule-button delete-button';
+                    cancelButton.dataset.jobId = job.id;
                     cancelButton.title = `Cancel schedule ${job.id}`;
-
-                    li.appendChild(textSpan);
-                    li.appendChild(cancelButton);
-                    schedulesList.appendChild(li);
+                    cellAction.appendChild(cancelButton);
                 });
+                console.log("Schedules loaded.");
             } else {
-                schedulesList.innerHTML = '<li>No active schedules found.</li>';
+                schedulesListBody.innerHTML = '<tr><td colspan="3" class="subtext">No active schedules found.</td></tr>';
             }
         } catch (error) {
-            schedulesList.innerHTML = '<li>Error loading schedules.</li>';
-            // Error message already shown by fetchData
+            schedulesListBody.innerHTML = `<tr><td colspan="3" class="error-message">Error loading schedules: ${error.message}</td></tr>`;
         }
-     }
-
+    }
 
     // --- Event Listeners ---
+    if (notificationCloseBtn) {
+        notificationCloseBtn.addEventListener('click', hideNotification);
+    }
 
-    // Download Form Submit
+    if (reportTableSearchInput && reportTableBody) {
+        reportTableSearchInput.addEventListener('keyup', () => filterTable(reportTableSearchInput, reportTableBody));
+    }
+    if (logTableSearchInput && logDataTableBody) {
+        logTableSearchInput.addEventListener('keyup', () => filterTable(logTableSearchInput, logDataTableBody));
+    }
+
     if (form) {
         form.addEventListener('submit', handleDownloadFormSubmit);
     }
 
-    // Refresh Log Button
     if (refreshLogButton) {
         refreshLogButton.addEventListener('click', fetchLogs);
     }
 
-    // Report Type Change (Event Delegation on Table)
-    if (reportTable) {
-         reportTable.addEventListener('change', (event) => {
-             if (event.target && event.target.matches("select[name='report_type[]']")) {
-                 updateRegionSelectionVisibilityBasedOnAllRows();
-             }
-         });
-    }
-
-    // --- Configuration Management Buttons ---
-    if (saveConfigButton) {
+    if (saveConfigButton && configNameInput) {
         saveConfigButton.addEventListener('click', async () => {
             const configName = configNameInput.value.trim();
-            if (!configName) { alert("Please enter a configuration name."); return; }
+            if (!configName) {
+                showNotification("Please enter a configuration name.", "warning");
+                return;
+            }
             const configData = getCurrentFormData();
-             if (!configData.reports || configData.reports.length === 0) {
-                 alert("Please configure at least one valid report before saving."); return;
-             }
+            if (!configData.reports || configData.reports.length === 0) {
+                showNotification("Configure at least one report before saving.", "warning");
+                return;
+            }
             try {
                 const result = await fetchData('/save-config', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ config_name: configName, config_data: configData })
                 });
                 if (result.status === 'success') {
-                    addStatusMessage(result.message, false, true);
-                    configNameInput.value = ''; // Clear name input
-                    fetchAndPopulateConfigs(); // Refresh config dropdowns
+                    showNotification(result.message || `Configuration "${configName}" saved.`, 'success');
+                    configNameInput.value = '';
+                    fetchAndPopulateConfigs();
                 }
-            } catch (error) { /* Handled by fetchData */ }
-        });
-     }
-
-    if (loadConfigButton) {
-         loadConfigButton.addEventListener('click', async () => {
-            const selectedConfigName = savedConfigsDropdown.value;
-            if (!selectedConfigName) { alert("Please select a configuration to load."); return; }
-            try {
-                 const result = await fetchData(`/load-config/${selectedConfigName}`);
-                 if (result.status === 'success' && result.config_data) {
-                     applyConfiguration(result.config_data);
-                 } else {
-                      // Handle case where config_data might be missing even if status is success (though API shouldn't do that)
-                      addStatusMessage(result.message || `Could not load config ${selectedConfigName}.`, true);
-                      console.error("Failed to load config or config_data missing:", result);
-                 }
-            } catch (error) { /* Handled by fetchData */ }
+            } catch (error) {}
         });
     }
 
-    if (deleteConfigButton) {
+    if (loadConfigButton && savedConfigsDropdown) {
+        loadConfigButton.addEventListener('click', async () => {
+            const selectedConfigName = savedConfigsDropdown.value;
+            if (!selectedConfigName) {
+                showNotification("Select a configuration to load.", "warning");
+                return;
+            }
+            try {
+                const result = await fetchData(`/load-config/${selectedConfigName}`);
+                if (result.status === 'success' && result.config_data) {
+                    applyConfiguration(result.config_data);
+                } else {
+                    throw new Error(result.message || `Could not load config "${selectedConfigName}".`);
+                }
+            } catch (error) {}
+        });
+    }
+
+    if (deleteConfigButton && savedConfigsDropdown) {
         deleteConfigButton.addEventListener('click', async () => {
             const selectedConfigName = savedConfigsDropdown.value;
-            if (!selectedConfigName) { alert("Please select a configuration to delete."); return; }
-            if (!confirm(`Are you sure you want to delete configuration "${selectedConfigName}"?`)) { return; }
+            if (!selectedConfigName) {
+                showNotification("Select a configuration to delete.", "warning");
+                return;
+            }
+            if (!confirm(`Are you sure you want to delete configuration "${selectedConfigName}"? This cannot be undone.`)) return;
             try {
-                 // Use await with fetchData
-                 const result = await fetchData(`/delete-config/${selectedConfigName}`, { method: 'DELETE' });
-                 // Check result status explicitly
-                 if (result && result.status === 'success') {
-                     addStatusMessage(result.message || `Configuration "${selectedConfigName}" deleted.`, false, true);
-                     fetchAndPopulateConfigs(); // Refresh config dropdowns
-                 }
-                 // No else needed, fetchData handles API errors
-            } catch (error) { /* Handled by fetchData */ }
+                const result = await fetchData(`/delete-config/${selectedConfigName}`, { method: 'DELETE' });
+                if (result && result.status === 'success') {
+                    showNotification(result.message || `Configuration "${selectedConfigName}" deleted.`, 'success');
+                    fetchAndPopulateConfigs();
+                }
+            } catch (error) {}
         });
-     }
+    }
 
-    // --- Scheduling Buttons ---
-    if (scheduleButton) {
+    if (scheduleButton && scheduleConfigSelect && scheduleDateTimeInput) {
         scheduleButton.addEventListener('click', async () => {
             const configName = scheduleConfigSelect.value;
-            const runDateTime = scheduleDateTimeInput.value; // Format: YYYY-MM-DDTHH:MM
-
-            // Validation
-            if (!configName) { alert("Please select a saved configuration to schedule."); return; }
-            if (!runDateTime) { alert("Please select a date and time to run the job."); return; }
+            const runDateTime = scheduleDateTimeInput.value;
+            if (!configName) {
+                showNotification("Select a configuration to schedule.", "warning");
+                return;
+            }
+            if (!runDateTime) {
+                showNotification("Select date and time to run.", "warning");
+                return;
+            }
             try {
                 const selectedDate = new Date(runDateTime);
-                // Add a small buffer (e.g., 1 minute) to avoid scheduling exactly 'now'
                 const bufferMinutes = 1;
                 const minDate = new Date(Date.now() + bufferMinutes * 60 * 1000);
                 if (selectedDate <= minDate) {
-                    alert(`Please select a time at least ${bufferMinutes} minute(s) in the future.`);
+                    showNotification(`Select a time at least ${bufferMinutes} minute(s) in the future.`, "warning");
                     return;
                 }
-            } catch (e) { alert("Invalid date/time format."); return; }
-
+            } catch (e) {
+                showNotification("Invalid date/time format.", "error");
+                return;
+            }
             console.log(`Scheduling config: ${configName} at ${runDateTime}`);
             try {
                 const result = await fetchData('/schedule-job', {
@@ -842,109 +933,84 @@ document.addEventListener('DOMContentLoaded', () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         config_name: configName,
-                        trigger_type: 'date', // Only 'date' trigger supported currently
+                        trigger_type: 'date',
                         run_datetime: runDateTime
                     })
                 });
                 if (result.status === 'success') {
-                    addStatusMessage(result.message || `Job scheduled for ${configName}.`, false, true);
-                    fetchAndDisplaySchedules(); // Refresh the schedule list
-                    // Optionally clear inputs
+                    showNotification(result.message || `Job scheduled for ${configName}.`, 'success');
+                    fetchAndDisplaySchedules();
                     scheduleConfigSelect.value = '';
                     scheduleDateTimeInput.value = '';
                 }
-            } catch (error) { /* Handled by fetchData */ }
+            } catch (error) {}
         });
-     }
+    }
 
-    // Cancel Schedule Button (Event Delegation)
-    if (schedulesList) {
-        schedulesList.addEventListener('click', async (event) => {
-            // Check if the clicked element is a cancel button
-            if (event.target && event.target.classList.contains('cancel-schedule-button')) {
-                const jobId = event.target.dataset.jobId;
-                if (!jobId) { console.error("Could not find job ID on cancel button."); return; }
-                if (!confirm(`Are you sure you want to cancel schedule ${jobId}?`)) { return; }
-
+    if (schedulesListBody) {
+        schedulesListBody.addEventListener('click', async (event) => {
+            const cancelButton = event.target.closest('.cancel-schedule-button');
+            if (cancelButton) {
+                const jobId = cancelButton.dataset.jobId;
+                if (!jobId) {
+                    console.error("Job ID missing on cancel button.");
+                    return;
+                }
+                if (!confirm(`Are you sure you want to cancel schedule ${jobId}?`)) return;
                 console.log(`Cancelling schedule: ${jobId}`);
                 try {
                     const result = await fetchData(`/cancel-schedule/${jobId}`, { method: 'DELETE' });
-                     // Check result status
-                     if (result && result.status === 'success') {
-                         addStatusMessage(result.message || `Job ${jobId} cancelled.`, false, true);
-                         fetchAndDisplaySchedules(); // Refresh the list
-                     }
-                    // No else needed, fetchData handles API errors
-                } catch (error) { /* Handled by fetchData */ }
-            }
-        });
-     }
-
-    // --- Event Listeners for Add/Remove Row (Moved from inline) ---
-    if (addRowButton) {
-        addRowButton.addEventListener("click", function () {
-            if (!reportTableBody) return;
-            const firstRow = reportTableBody.querySelector("tr");
-            if (!firstRow) { console.error("Cannot add row: Template row not found."); return; }
-
-            const newRow = firstRow.cloneNode(true); // Clone template
-
-            // Reset values and set defaults for the new row
-            const reportSelect = newRow.querySelector("select[name='report_type[]']");
-            const chunkSizeInput = newRow.querySelector("input[name='chunk_size[]']");
-            if(reportSelect) reportSelect.selectedIndex = 0;
-            setDefaultDates(newRow); // Set default dates
-            if(chunkSizeInput) chunkSizeInput.value = "5";
-
-            // Add change listener to the *new* select dropdown
-            const newSelect = newRow.querySelector("select[name='report_type[]']");
-            if (newSelect && !newSelect.dataset.listenerAttached) {
-                newSelect.addEventListener('change', updateRegionSelectionVisibilityBasedOnAllRows);
-                newSelect.dataset.listenerAttached = 'true';
-            }
-
-            reportTableBody.appendChild(newRow);
-            updateRegionSelectionVisibilityBasedOnAllRows(); // Update UI
-        });
-    }
-
-    if (reportTable) { // Use table reference for delegation
-        reportTable.addEventListener("click", function (event) {
-            if (event.target.classList.contains("remove-row-button")) {
-                const row = event.target.closest("tr");
-                // Prevent removing the last row
-                if (reportTableBody && reportTableBody.querySelectorAll("tr").length > 1) {
-                    row.remove();
-                    updateRegionSelectionVisibilityBasedOnAllRows(); // Update UI
-                } else {
-                    alert("Must have at least one report configuration row.");
-                }
+                    if (result && result.status === 'success') {
+                        showNotification(result.message || `Job ${jobId} cancelled.`, 'success');
+                        fetchAndDisplaySchedules();
+                    }
+                } catch (error) {}
             }
         });
     }
 
-    // --- Section Collapse Toggles ---
-    document.querySelectorAll('.toggle-section').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const targetId = btn.getAttribute('data-target');
-            const section = document.getElementById(targetId);
-            const icon = btn.querySelector('.toggle-icon');
-            if (!section) return;
-            if (section.style.display === 'none') {
-                section.style.display = 'block';
-                if (icon) icon.classList.replace('fa-chevron-down', 'fa-chevron-up');
-            } else {
-                section.style.display = 'none';
-                if (icon) icon.classList.replace('fa-chevron-up', 'fa-chevron-down');
+    if (saveAdvancedSettingsButton) {
+        saveAdvancedSettingsButton.addEventListener('click', async () => {
+            const settings = {
+                otp_secret: otpSecretInput ? otpSecretInput.value : undefined,
+                driver_path: driverPathInput ? driverPathInput.value : undefined,
+                download_base_path: downloadBasePathInput ? downloadBasePathInput.value : undefined
+            };
+            console.log("Saving advanced settings:", settings);
+            showNotification("Advanced settings saved (simulation).", "success");
+        });
+    }
+
+    if (bulkEmailForm && sendEmailButton && emailLoadingIndicator && emailStatusMessagesDiv) {
+        bulkEmailForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            sendEmailButton.disabled = true;
+            emailLoadingIndicator.style.display = 'inline-block';
+            clearStatusMessages(emailStatusMessagesDiv);
+            addStatusMessage(emailStatusMessagesDiv, "Preparing to send emails...", 'info');
+            const formData = new FormData(bulkEmailForm);
+            console.log("Bulk Email Form Data:", Object.fromEntries(formData));
+            try {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                addStatusMessage(emailStatusMessagesDiv, "Emails sent successfully (simulation).", 'success');
+                showNotification("Bulk emails sent.", "success");
+                bulkEmailForm.reset();
+            } catch (error) {
+                console.error("Bulk Email Error:", error);
+                const msg = `Error sending emails: ${error.message}`;
+                addStatusMessage(emailStatusMessagesDiv, msg, 'error');
+                showNotification(msg, "error");
+            } finally {
+                sendEmailButton.disabled = false;
+                emailLoadingIndicator.style.display = 'none';
             }
         });
-    });
+    }
 
-    // --- Initial Page Setup ---
-    console.log("Initializing page...");
-    fetchAndPopulateReportData(); // Fetch reports & set initial dates
-    fetchLogs();                  // Fetch download history
-    fetchAndPopulateConfigs();    // Fetch saved configurations
-    fetchAndDisplaySchedules();   // Fetch active schedules
-
-}); // End DOMContentLoaded
+    // --- Initial Page Load Actions ---
+    console.log("Running initial setup...");
+    fetchAndPopulateReportData();
+    fetchAndPopulateConfigs();
+    switchPanel('main-download-panel');
+    console.log("Initialization complete.");
+});

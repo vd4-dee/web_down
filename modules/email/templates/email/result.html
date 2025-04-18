@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Send Results</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <style>
+      body { background: #F8F9FA; }
+    </style>
+</head>
+<body style="display:flex;min-height:100vh;">
+  <aside id="sidebar" style="width:220px;background:#EDEFF2;display:flex;flex-direction:column;align-items:center;padding:32px 0;">
+    <h2 style="font-size:24px;font-family:'Roboto',sans-serif;color:#00A1B7;margin-bottom:32px;">Menu</h2>
+    <nav style="width:100%;">
+      <ul style="list-style:none;padding:0;margin:0;width:100%;">
+        <li><a href="/" style="display:block;padding:12px 32px;color:#333333;font-size:16px;text-decoration:none;font-weight:500;">Download</a></li>
+        <li><a href="{{ url_for('email.index') }}" style="display:block;padding:12px 32px;color:#333333;font-size:16px;text-decoration:none;font-weight:500;background:#E5E7EB;border-radius:6px;">Email</a></li>
+      </ul>
+    </nav>
+  </aside>
+  <main id="main-content" style="flex:1;padding:40px 5vw 40px 5vw;max-width:100vw;">
+    <div id="notification" class="notification" style="display:none;">New items saved</div>
+    <div class="card-container" style="margin-bottom:32px;">
+      <div class="card">
+        <i class="fas fa-envelope card-icon"></i>
+        <div class="card-title">Bulk Email</div>
+        <a href="{{ url_for('email.index') }}" class="card-button">Open</a>
+      </div>
+      <div class="card">
+        <i class="fas fa-history card-icon"></i>
+        <div class="card-title">Send History</div>
+        <a href="#send-history" class="card-button">Open</a>
+      </div>
+    </div>
+    <section id="send-result">
+      <h1 style="font-size:24px;font-family:'Roboto',sans-serif;color:#333333;margin-bottom:24px;">Send Results</h1>
+      <div style="background:#fff;border-radius:8px;padding:32px;box-shadow:0 2px 8px #0001;margin-bottom:24px;">
+        <p style="font-size:14px;color:#333333;">Session ID: <span style="color:#6B7280;">{{ result.session_id }}</span></p>
+        <p style="font-size:14px;color:#333333;">Total: <b>{{ result.total }}</b>, Success: <span style="color:#00A1B7;font-weight:600;">{{ result.success }}</span>, Failed: <span style="color:#d9534f;font-weight:600;">{{ result.failed }}</span></p>
+        <table class="data-table" style="background:#fff;border-radius:8px;overflow:hidden;">
+          <thead>
+            <tr>
+              <th>Recipient</th>
+              <th>Status</th>
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in result.details %}
+              <tr>
+                <td>{{ r.recipient }}</td>
+                <td style="color:{{ '00A1B7' if r.status=='Success' else '#d9534f' }};font-weight:600;">{{ r.status }}</td>
+                <td style="color:#6B7280;">{{ r.error }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <a href="{{ url_for('email.index') }}" class="btn card-button" style="margin-top:20px;">Send Another</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

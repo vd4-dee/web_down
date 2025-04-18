@@ -1,0 +1,218 @@
+body {
+    background: #F8F9FA;
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    min-height: 100vh;
+}
+
+aside {
+    width: 220px;
+    background: #EDEFF2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 0;
+    position: fixed;
+    height: 100vh;
+}
+
+aside h2 {
+    font-size: 24px;
+    color: #00A1B7;
+    margin-bottom: 32px;
+    font-weight: 600;
+}
+
+nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+}
+
+nav li {
+    margin: 0 16px 8px;
+}
+
+nav a {
+    display: block;
+    padding: 12px 32px;
+    color: #333333;
+    font-size: 16px;
+    text-decoration: none;
+    font-weight: 500;
+    border-radius: 6px;
+}
+
+nav a:hover, nav a.active {
+    background: #E5E7EB;
+}
+
+main {
+    flex: 1;
+    padding: 40px 5vw;
+    margin-left: 220px;
+}
+
+.notification {
+    display: none;
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 2px 8px #0001;
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    color: #333333;
+    font-size: 14px;
+}
+
+section {
+    margin-bottom: 32px;
+}
+
+h2 {
+    font-size: 24px;
+    color: #333333;
+    font-weight: 600;
+    margin-bottom: 24px;
+}
+
+.card-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 2px 8px #0001;
+    width: 200px;
+    text-align: center;
+}
+
+.card-icon {
+    font-size: 24px;
+    color: #00A1B7;
+    margin-bottom: 16px;
+}
+
+.card-title {
+    font-size: 18px;
+    color: #333333;
+    font-weight: 500;
+    margin-bottom: 16px;
+}
+
+.card-button {
+    background: #00A1B7;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 14px;
+    display: inline-block;
+}
+
+.card-button:hover {
+    background: #008a9e;
+}
+
+.table-search {
+    padding: 8px;
+    font-size: 14px;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    width: 200px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px #0001;
+}
+
+th, td {
+    padding: 12px;
+    font-size: 14px;
+    color: #333333;
+    text-align: left;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+th {
+    font-weight: 600;
+    background: #F8F9FA;
+}
+
+td {
+    color: #333333;
+}
+
+input, select, textarea {
+    padding: 8px;
+    font-size: 14px;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    width: 100%;
+}
+
+button {
+    padding: 8px 16px;
+    background: #00A1B7;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #008a9e;
+}
+
+button:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+}
+
+.delete-button {
+    background: #dc3545;
+}
+
+.delete-button:hover {
+    background: #c82333;
+}
+
+.form-group {
+    margin-bottom: 24px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 14px;
+    color: #333333;
+    margin-bottom: 8px;
+}
+
+#status-messages {
+    background: #F8F9FA;
+    border-radius: 6px;
+    padding: 16px;
+    min-height: 100px;
+    font-size: 14px;
+    color: #333333;
+}
+
+#schedules-list li {
+    font-size: 14px;
+    color: #6B7280;
+    margin-bottom: 8px;
+}

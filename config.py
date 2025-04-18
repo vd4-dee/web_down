@@ -27,7 +27,7 @@ import os
 # Load from environment variables first, then fallback to hardcoded (unsafe) example
 OTP_SECRET = os.getenv('OTP_SECRET', 'TAPHLYTABSKHTZWM') # <-- REPLACE or set ENV VAR
 DRIVER_PATH = os.getenv('CHROMEDRIVER_PATH', os.path.abspath('chromedriver.exe')) # Verify path or set ENV VAR
-DOWNLOAD_BASE_PATH = os.getenv('DOWNLOAD_PATH', os.path.abspath(r"D:\Base\Checking")) # Verify path or set ENV VAR
+DOWNLOAD_BASE_PATH = os.getenv('DOWNLOAD_PATH', os.path.abspath(r"D:\OneDrive\KT\Checking")) # Verify path or set ENV VAR
 
 # --- Optional Configuration (UI Defaults) ---
 DEFAULT_EMAIL = os.getenv('DEFAULT_EMAIL', 'khangvd4')
@@ -68,3 +68,9 @@ REPORTS = [
         "url": "https://bi.nhathuoclongchau.com.vn/MIS/PHAR/PHARFAF030.aspx"
     }
 ]
+
+# --- Email Module Defaults ---
+DEFAULT_SENDER = DEFAULT_EMAIL
+EMAIL_BATCH_SIZE = int(os.getenv('EMAIL_BATCH_SIZE', '50'))
+EMAIL_PAUSE_SECONDS = int(os.getenv('EMAIL_PAUSE_SECONDS', '5'))
+EMAIL_LOG_PATH = os.getenv('EMAIL_LOG_PATH', os.path.abspath('email_log.csv'))

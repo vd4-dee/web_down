@@ -1,0 +1,182 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Send KPI to ASM\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import os\n",
+    "import pandas as pd\n",
+    "import win32com.client as win32\n",
+    "from datetime import datetime\n",
+    "import csv"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Đường dẫn tệp và thư mục\n",
+    "# Đường dẫn tệp và thư mục\n",
+    "var_kibaocao = '03/2025'\n",
+    "subject = f\"[FAF-KPIs] KPIs ASM {var_kibaocao} -\"  # Use formatted string for better readability\n",
+    "\n",
+    "excel_file_path = os.path.join(os.getcwd(), 'Danhsachguimail_kpiasm_rsm.xlsx')\n",
+    "# excel_file_path_test = os.path.join(os.getcwd(), 'Danhsachguimail_kpiasm_rsm_test.xlsx')\n",
+    "html_file_path = os.path.join(os.getcwd(), 'kpi.asm.torsm.html')\n",
+    "attachments_folder = os.path.join(os.getcwd(), 'attachment')\n",
+    "log_file = os.path.join(os.getcwd(), 'email_sending_log.csv')\n",
+    "# var_deadline = '12h00 ngày 09/11/2024'\n",
+    "# Xác định phạm vi email cần gửi (sử dụng None để gửi tất cả)\n",
+    "start_index = 2  # Email bắt đầu (0-based index)\n",
+    "end_index = None  # Email kết thúc (0-based index, bao gồm email này)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def send_bulk_emails(excel_file, html_file, attachments_folder, log_file, start_index=None, end_index=None):\n",
+    "    # Clear the log file and add header at the start of the function\n",
+    "    with open(log_file, 'w', newline='', encoding='utf-8') as log:\n",
+    "        writer = csv.writer(log)\n",
+    "        writer.writerow([\"Timestamp\", \"Recipient\", \"Status/Message\"])  # Add the header row\n",
+    "\n",
+    "    # Read Excel file\n",
+    "    try:\n",
+    "        df = pd.read_excel(excel_file, sheet_name='Data')\n",
+    "        if df.empty:\n",
+    "            raise ValueError(\"The Excel file is empty or could not be read correctly.\")\n",
+    "    except Exception as e:\n",
+    "        with open(log_file, 'a', newline='', encoding='utf-8') as log:\n",
+    "            writer = csv.writer(log)\n",
+    "            writer.writerow([datetime.now(), \"Error reading Excel file\", str(e)])\n",
+    "        return\n",
+    "\n",
+    "    # Read HTML file as email content\n",
+    "    try:\n",
+    "        with open(html_file, 'r', encoding='utf-8') as file:\n",
+    "            html_template = file.read()\n",
+    "    except Exception as e:\n",
+    "        with open(log_file, 'a', newline='', encoding='utf-8') as log:\n",
+    "            writer = csv.writer(log)\n",
+    "            writer.writerow([datetime.now(), \"Error reading HTML file\", str(e)])\n",
+    "        return\n",
+    "\n",
+    "    # Initialize Outlook\n",
+    "    try:\n",
+    "        outlook = win32.Dispatch('outlook.application')\n",
+    "    except Exception as e:\n",
+    "        with open(log_file, 'a', newline='', encoding='utf-8') as log:\n",
+    "            writer = csv.writer(log)\n",
+    "            writer.writerow([datetime.now(), \"Error initializing Outlook\", str(e)])\n",
+    "        return\n",
+    "\n",
+    "    # Determine email range\n",
+    "    if start_index is None:\n",
+    "        start_index = 0\n",
+    "    if end_index is None:\n",
+    "        end_index = len(df) - 1\n",
+    "\n",
+    "    # Process emails within the specified range\n",
+    "    for index, row in df.iloc[start_index:end_index + 1].iterrows():\n",
+    "        try:\n",
+    "            # Replace placeholders in HTML content\n",
+    "            html_content = html_template.replace(\n",
+    "                \"Dear Anh/Chị RSM, PRSM,\", f\"Dear {row['Receiver']}\"\n",
+    "            ).replace(\"var_region\", row['Name']\n",
+    "            ).replace(\"var_kibaocao\", var_kibaocao\n",
+    "            )\n",
+    "\n",
+    "            mail = outlook.CreateItem(0)\n",
+    "            mail.To = row['To']\n",
+    "            mail.CC = row['CC'] if pd.notna(row['CC']) else \"\"\n",
+    "            mail.Subject = subject + row['Name']\n",
+    "            mail.HTMLBody = html_content\n",
+    "\n",
+    "            # Attach files if available and size is less than 1MB\n",
+    "            attachments = [row['Attachment']]\n",
+    "            for attachment in attachments:\n",
+    "                if pd.notna(attachment):\n",
+    "                    attachment_path = os.path.join(attachments_folder, attachment)\n",
+    "                    if os.path.exists(attachment_path):\n",
+    "                        if os.path.getsize(attachment_path) < 1 * 900 * 1024:  # Check if file size is less than 1MB\n",
+    "                            mail.Attachments.Add(attachment_path)\n",
+    "                        else:\n",
+    "                            raise ValueError(f\"Attachment file size exceeds 1MB: {attachment_path}\")\n",
+    "                    else:\n",
+    "                        raise FileNotFoundError(f\"Attachment file not found: {attachment_path}\")\n",
+    "\n",
+    "            # Send the email\n",
+    "            mail.Send()\n",
+    "            with open(log_file, 'a', newline='', encoding='utf-8') as log:\n",
+    "                writer = csv.writer(log)\n",
+    "                writer.writerow([datetime.now(), row['To'], \"Email sent successfully\"])\n",
+    "        except Exception as e:\n",
+    "            with open(log_file, 'a', newline='', encoding='utf-8') as log:\n",
+    "                writer = csv.writer(log)\n",
+    "                writer.writerow([datetime.now(), row['To'], f\"Error sending email: {e}\"])\n",
+    "\n",
+    "    print(f\"Emails from index {start_index} to {end_index} processed. Check the log file for details.\")\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Emails from index 2 to 6 processed. Check the log file for details.\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Gọi hàm gửi email\n",
+    "send_bulk_emails(excel_file_path, html_file_path, attachments_folder, log_file, start_index, end_index)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "base",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
