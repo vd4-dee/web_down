@@ -26,6 +26,10 @@ from logic_download import WebAutomation, regions_data, DownloadFailedException 
 import link_report
 
 app = Flask(__name__)
+app.secret_key = 'your_secret_key_here'  # Đặt secret key cho session/flash
+
+# --- Import Google Sheet Auth ---
+from auth_google_sheet import is_user_allowed
 
 # Module Blueprints
 from modules.email import email_bp
@@ -332,9 +336,29 @@ def trigger_scheduled_download(config_name):
     scheduled_thread.start()
 
 # --- Flask Routes ---
+from auth_google_sheet import is_user_allowed
+from flask import session, flash, redirect, url_for
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        if is_user_allowed(email):
+            session['user_email'] = email
+            return redirect(url_for('index'))
+        else:
+            flash('Bạn không có quyền sử dụng ứng dụng này.')
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('user_email', None)
+    return redirect(url_for('login'))
+
 @app.route('/')
 def index():
-    """Render the main UI page."""
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
     return render_template('index.html',
                            default_email=config.DEFAULT_EMAIL,
                            default_password=config.DEFAULT_PASSWORD,
