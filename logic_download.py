@@ -32,10 +32,10 @@ from selenium.common.exceptions import (
 
 # --- Constants ---
 # Increased timeouts (in seconds)
-SELENIUM_COMMAND_TIMEOUT = 1500 # Increased from default (usually 60s) for Selenium commands
-WEBDRIVER_WAIT_TIMEOUT = 900   # Increased timeout for explicit waits (WebDriverWait)
-PAGE_LOAD_TIMEOUT = 900        # Increased timeout for page loads
-DOWNLOAD_WAIT_TIMEOUT = 1800   # Max time to wait for a single file download (30 min)
+SELENIUM_COMMAND_TIMEOUT = 3600 # Increased from default (usually 60s) for Selenium commands
+WEBDRIVER_WAIT_TIMEOUT = 3600   # Increased timeout for explicit waits (WebDriverWait)
+PAGE_LOAD_TIMEOUT = 3600        # Increased timeout for page loads
+DOWNLOAD_WAIT_TIMEOUT = 3600   # Max time to wait for a single file download (30 min)
 RETRY_DELAY = 10               # Default delay between retries for operations
 CLICK_RETRY_DELAY = 15         # Longer delay specifically for click retries
 MAX_RETRIES = 3                # Default number of retries for operations prone to failure
@@ -163,10 +163,10 @@ class WebAutomation:
         self.extracted_zips = set()  # Track extracted zip files to avoid re-extraction
         self._status_callback = status_callback # Store callback for internal use
         # Derive session identifier from download folder name
-        import os as _os
-        self.session_id = _os.path.basename(self.download_folder)
-
-        self._log(f"Initializing WebAutomation. Download Folder: {self.download_folder}")
+        # self.session_id = os.path.basename(self.download_folder)
+        now = datetime.now()
+        self.session_id = os.path.basename(self.download_folder) + "-" + now.strftime("%H%M%S")
+        self._log(f"Session ID: {self.session_id}")
 
         try:
             RemoteConnection.set_timeout(SELENIUM_COMMAND_TIMEOUT)

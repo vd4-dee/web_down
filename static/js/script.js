@@ -1,3 +1,8 @@
+// Import timer.js
+const timerScript = document.createElement('script');
+timerScript.src = 'static/js/timer.js';
+document.head.appendChild(timerScript);
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log("DOM fully loaded and parsed.");
 
@@ -22,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadingIndicator = document.getElementById('loading-indicator');
     const statusMessagesDiv = document.getElementById('status-messages');
     const reportTableSearchInput = document.getElementById('report-table-search');
+    // Ensure search box is enabled
+    if (reportTableSearchInput) reportTableSearchInput.disabled = false;
 
     // Config Management Elements
     const configNameInput = document.getElementById('config-name');
@@ -75,6 +82,76 @@ document.addEventListener('DOMContentLoaded', () => {
     let eventSource = null;
     let statusChart = null;
     let notificationTimeout = null;
+
+    // --- Active Download Sessions ---
+    let activeSessions = [];
+    let activeSessionsTimer = null;
+
+    function addActiveSession(sessionId, startTime, reports) {
+        activeSessions.push({ sessionId, startTime, reports, expanded: false });
+        renderActiveSessions();
+        if (!activeSessionsTimer) {
+            activeSessionsTimer = setInterval(renderActiveSessions, 1000);
+        }
+    }
+    function removeActiveSession(sessionId) {
+        activeSessions = activeSessions.filter(s => s.sessionId !== sessionId);
+        renderActiveSessions();
+        if (activeSessions.length === 0 && activeSessionsTimer) {
+            clearInterval(activeSessionsTimer);
+            activeSessionsTimer = null;
+        }
+    }
+    function renderActiveSessions() {
+        const list = document.getElementById('active-downloads-list');
+        if (!list) return;
+        if (activeSessions.length === 0) {
+            list.innerHTML = '<tr><td colspan="4" class="subtext">No active downloads.</td></tr>';
+            return;
+        }
+        list.innerHTML = '';
+        activeSessions.forEach((session, idx) => {
+            const elapsed = Math.floor((Date.now() - session.startTime) / 1000);
+            const hour = Math.floor(elapsed / 3600).toString().padStart(2, '0');
+            const min = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
+            const sec = (elapsed % 60).toString().padStart(2, '0');
+            const tr = document.createElement('tr');
+            tr.className = 'session-row';
+            tr.innerHTML = `
+                <td><button class="expand-btn" data-idx="${idx}">${session.expanded ? '▼' : '▶'}</button></td>
+                <td>${session.sessionId}</td>
+                <td>${new Date(session.startTime).toLocaleString()}</td>
+                <td>${hour}:${min}:${sec}</td>
+            `;
+            list.appendChild(tr);
+            // Detail row
+            const detailTr = document.createElement('tr');
+            detailTr.className = 'session-detail-row';
+            detailTr.style.display = session.expanded ? '' : 'none';
+            detailTr.innerHTML = `<td colspan="4">
+                <div class="report-list-detail">
+                    <strong>Reports being downloaded:</strong>
+                    <table class="data-table report-list-table">
+                        <thead><tr><th>Report Name</th><th>From Date</th><th>To Date</th><th>Chunk Size</th></tr></thead>
+                        <tbody>
+                            ${session.reports && session.reports.length > 0 ? session.reports.map(r => `
+                                <tr><td>${r.report_type}</td><td>${r.from_date}</td><td>${r.to_date}</td><td>${r.chunk_size}</td></tr>
+                            `).join('') : '<tr><td colspan="4" class="subtext">No reports</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </td>`;
+            list.appendChild(detailTr);
+        });
+        // Add expand/collapse event listeners
+        list.querySelectorAll('.expand-btn').forEach(btn => {
+            btn.onclick = function() {
+                const idx = parseInt(btn.getAttribute('data-idx'));
+                activeSessions[idx].expanded = !activeSessions[idx].expanded;
+                renderActiveSessions();
+            };
+        });
+    }
 
     // --- Helper Functions ---
 
@@ -249,11 +326,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Report Table Search Functionality ---
+    if (reportTableSearchInput && reportTableBody) {
+        reportTableSearchInput.disabled = false;
+        reportTableSearchInput.addEventListener('input', function() {
+            filterTable(reportTableSearchInput, reportTableBody);
+        });
+    }
     // --- Navigation & Panel Switching ---
     function switchPanel(targetId) {
         console.log("Switching to panel:", targetId);
         if (!targetId) return;
         mainPanels.forEach(panel => panel.style.display = 'none');
+        // If switching to active downloads panel, refresh its content immediately
+        if (targetId === 'active-downloads-panel') {
+            renderActiveSessions();
+        }
         sidebarLinks.forEach(link => link.classList.remove('active'));
         const targetPanel = document.getElementById(targetId);
         if (targetPanel) {
@@ -513,6 +601,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleDownloadFormSubmit(event) {
+        // Generate SessionID as timestamp
+        const sessionId = Date.now().toString();
+        const sessionStartTime = Date.now();
         event.preventDefault();
         console.log("Download form submitted");
         if (!form || !downloadButton || !loadingIndicator || !statusMessagesDiv) return;
@@ -560,6 +651,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            showDownloadTimer && showDownloadTimer(); // Hiện timer khi bắt đầu tải
+            // Add to active sessions
+            addActiveSession(sessionId, sessionStartTime, currentData.reports);
             const result = await fetchData('/start-download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -568,7 +662,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (result && result.status === 'started') {
                 addStatusMessage(statusMessagesDiv, "Request accepted. Waiting for status updates...", 'info');
-                setupEventSource();
+                setupEventSource(sessionId);
             } else {
                 downloadButton.disabled = false;
                 loadingIndicator.style.display = 'none';
@@ -581,6 +675,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } catch (error) {
+            hideDownloadTimer && hideDownloadTimer(); // Ẩn timer khi lỗi
+            removeActiveSession(sessionId); // Remove from active sessions on error
             downloadButton.disabled = false;
             loadingIndicator.style.display = 'none';
             // Enable lại các input/select nếu có lỗi
@@ -593,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function setupEventSource() {
+    function setupEventSource(sessionId) {
         if (eventSource) eventSource.close();
         console.log("Setting up SSE connection to /stream-status");
         eventSource = new EventSource('/stream-status');
@@ -608,6 +704,8 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("SSE message received:", message);
             if (message === "FINISHED") {
                 addStatusMessage(statusMessagesDiv, "--- PROCESS COMPLETED ---", 'success');
+                hideDownloadTimer && hideDownloadTimer(); // Ẩn timer khi hoàn thành
+                removeActiveSession(sessionId); // Remove from active sessions on finish
                 if (eventSource) eventSource.close();
                 eventSource = null;
                 downloadButton.disabled = false;
@@ -616,6 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showNotification("Download process finished.", "success");
             } else if (message.startsWith("ERROR:")) {
                 addStatusMessage(statusMessagesDiv, message, 'error');
+                removeActiveSession(sessionId); // Remove on error
             } else {
                 addStatusMessage(statusMessagesDiv, message);
             }
@@ -1071,6 +1170,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 sendEmailButton.disabled = false;
                 emailLoadingIndicator.style.display = 'none';
             }
+        });
+    }
+
+    // --- Show/Hide Password and OTP Secret ---
+    // Use already declared passwordInput and otpSecretInput from the top
+    const togglePasswordBtn = document.getElementById('toggle-password-visibility');
+    if (togglePasswordBtn && passwordInput) {
+        togglePasswordBtn.addEventListener('click', function() {
+            const isHidden = passwordInput.type === 'password';
+            passwordInput.type = isHidden ? 'text' : 'password';
+            togglePasswordBtn.innerHTML = `<i class=\"fas fa-${isHidden ? 'eye-slash' : 'eye'}\"></i>`;
+        });
+    }
+    // Advanced Settings OTP Secret show/hide logic
+    const otpSecretInputAdv = document.querySelector('#advanced-settings-panel #otp-secret');
+    const toggleOtpBtnAdv = document.getElementById('toggle-otp-visibility-adv');
+    if (toggleOtpBtnAdv && otpSecretInputAdv) {
+        toggleOtpBtnAdv.addEventListener('click', function() {
+            const isHidden = otpSecretInputAdv.type === 'password';
+            otpSecretInputAdv.type = isHidden ? 'text' : 'password';
+            toggleOtpBtnAdv.innerHTML = `<i class=\"fas fa-${isHidden ? 'eye-slash' : 'eye'}\"></i>`;
         });
     }
 
