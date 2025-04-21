@@ -343,12 +343,41 @@ from flask import session, flash, redirect, url_for
 def login():
     if request.method == 'POST':
         email = request.form['email']
-        if is_user_allowed(email):
+        password = request.form['password']
+        from auth_google_sheet import check_user_credentials
+        if check_user_credentials(email, password):
             session['user_email'] = email
             return redirect(url_for('index'))
         else:
-            flash('Bạn không có quyền sử dụng ứng dụng này.')
+            flash('Invalid email or password.')
     return render_template('login.html')
+
+@app.route('/change_password', methods=['GET', 'POST'])
+def change_password():
+    from auth_google_sheet import check_user_credentials, update_user_password
+    if request.method == 'POST':
+        email = request.form['email']
+        old_password = request.form['old_password']
+        new_password = request.form['new_password']
+        if not (email and old_password and new_password):
+            flash('Please fill in all fields.')
+            return render_template('change_password.html')
+        if not check_user_credentials(email, old_password):
+            flash('Current password is incorrect.')
+            return render_template('change_password.html')
+        if old_password == new_password:
+            flash('New password must be different from current password.')
+            return render_template('change_password.html')
+        try:
+            updated = update_user_password(email, new_password)
+            if updated:
+                flash('Password changed successfully. Please log in with your new password.')
+                return redirect(url_for('login'))
+            else:
+                flash('Email not found.')
+        except Exception as e:
+            flash('An error occurred: {}'.format(e))
+    return render_template('change_password.html')
 
 @app.route('/logout')
 def logout():

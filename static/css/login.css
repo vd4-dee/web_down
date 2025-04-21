@@ -1,4 +1,12 @@
 /* Login Page Custom Styles */
+.login-outer {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8f9fa;
+}
+
 .login-container {
     background: #fff;
     max-width: 370px;
@@ -57,7 +65,8 @@
     display: block;
     color: #222b3a;
 }
-.login-form input[type="text"] {
+.login-form input[type="text"],
+.login-form input[type="password"] {
     width: 100%;
     padding: 12px 14px;
     border-radius: 8px;
@@ -66,7 +75,10 @@
     background: #f8fafc;
     transition: border-color 0.2s;
     outline: none;
+    box-sizing: border-box;
+    height: 44px;
 }
+
 .login-form input[type="text"]:focus {
     border-color: #00A1B7;
     box-shadow: 0 0 0 2px rgba(0,161,183,0.10);

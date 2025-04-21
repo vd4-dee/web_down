@@ -25,10 +25,18 @@
         <form method="post" class="login-form">
             <div class="form-group">
                 <label for="email">Email:</label>
-                <input type="text" id="email" name="email" required autofocus>
+                <input type="text" id="email" name="email" required autofocus placeholder="Enter your email">
             </div>
-            <button type="submit"><i class="fas fa-sign-in-alt"></i> Sign in</button>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required placeholder="Enter your password">
+            </div>
+            <div style="text-align: right; margin-bottom: 10px;">
+                <a href="{{ url_for('change_password') }}" style="font-size: 0.98rem; color: #00A1B7; text-decoration: underline;">Forgot password?</a>
+            </div>
+            <button type="submit" class="login-btn"><i class="fas fa-sign-in-alt"></i> Sign in</button>
         </form>
+<!-- End login form -->
     </div>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
