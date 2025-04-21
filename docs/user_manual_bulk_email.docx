@@ -1,0 +1,32 @@
+User Guide: Bulk Email
+
+---
+
+**Chức năng:** Bulk Email (Gửi email hàng loạt)
+
+**Mô tả:**
+Chức năng này cho phép người dùng gửi email tới nhiều người nhận cùng lúc, sử dụng mẫu email và danh sách file đính kèm. Chỉ những người dùng có quyền "email.bulk" hoặc "owner" mới truy cập được chức năng này.
+
+**Các bước sử dụng:**
+1. Đăng nhập vào hệ thống bằng email và mật khẩu được cấp.
+2. Trên sidebar, chọn mục **Bulk Email**.
+3. Chọn hoặc nhập nội dung email, chủ đề, và các file đính kèm (nếu có).
+4. Tải lên danh sách người nhận (file Excel hoặc nhập trực tiếp).
+5. Nhấn nút **Send** để gửi email hàng loạt.
+
+**Lưu ý:**
+- Nếu không thấy mục này trên sidebar, vui lòng liên hệ quản trị viên để được cấp quyền.
+- Nếu có vấn đề về gửi email, liên hệ: khangvd4@fpt.com
+
+**Các quyền liên quan:**
+- `email.bulk`: Cho phép gửi email hàng loạt.
+- `owner`: Toàn quyền truy cập mọi chức năng.
+
+---
+
+**Hướng dẫn sử dụng chi tiết kèm hình ảnh sẽ được cập nhật khi hệ thống hoàn thiện.**
+
+---
+
+**Mọi thắc mắc, vui lòng liên hệ:**
+- Email: khangvd4@fpt.com

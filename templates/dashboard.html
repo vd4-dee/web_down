@@ -1,0 +1,85 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="main-content dashboard-container">
+    <h1>Welcome{% if user_email %}, {{ user_email }}{% endif %}!</h1>
+    <p class="subtext">Quick access to your main features and statistics.</p>
+    <section class="dashboard-cards">
+        <div class="dashboard-card" onclick="window.location.href='{{ url_for('download.index') }}'">
+            <i class="fas fa-download card-icon"></i>
+            <div class="card-content">
+                <h3>Download Reports</h3>
+                <p>Configure and download reports.</p>
+            </div>
+        </div>
+        <div class="dashboard-card" onclick="window.location.href='{{ url_for('schedule.index') }}'">
+            <i class="fas fa-calendar-alt card-icon"></i>
+            <div class="card-content">
+                <h3>Schedule Download</h3>
+                <p>Automate your downloads.</p>
+            </div>
+        </div>
+        <div class="dashboard-card" onclick="window.location.href='{{ url_for('download.download_history') }}'">
+            <i class="fas fa-history card-icon"></i>
+            <div class="card-content">
+                <h3>Download History</h3>
+                <p>View your download logs.</p>
+            </div>
+        </div>
+        <div class="dashboard-card" onclick="window.location.href='{{ url_for('email.index') }}'">
+            <i class="fas fa-envelope card-icon"></i>
+            <div class="card-content">
+                <h3>Email Sending</h3>
+                <p>Send reports via email.</p>
+            </div>
+        </div>
+        <div class="dashboard-card" onclick="window.location.href='{{ url_for('main.user_manuals') }}'">
+            <i class="fas fa-book card-icon"></i>
+            <div class="card-content">
+                <h3>User Manuals</h3>
+                <p>View user guides.</p>
+            </div>
+        </div>
+    </section>
+    <section class="dashboard-stats">
+        <h2>Overview Statistics</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-label">Recent Downloads</span>
+                <span class="stat-value">{{ stats.downloads or 0 }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Scheduled Jobs</span>
+                <span class="stat-value">{{ stats.schedules or 0 }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Emails Sent</span>
+                <span class="stat-value">{{ stats.emails or 0 }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">System Status</span>
+                <span class="stat-value status-ok">Online</span>
+            </div>
+        </div>
+    </section>
+</div>
+<style>
+.dashboard-container { max-width: 1200px; margin: 0 auto; }
+.dashboard-cards { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 36px; }
+.dashboard-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); padding: 24px 18px; flex: 1 1 210px; min-width: 210px; max-width: 240px; cursor: pointer; display: flex; flex-direction: column; align-items: center; transition: box-shadow 0.2s; }
+.dashboard-card:hover { box-shadow: 0 4px 24px rgba(0,160,183,0.18); }
+.card-icon { font-size: 2.4rem; color: #00A1B7; margin-bottom: 12px; }
+.card-content h3 { margin: 0 0 6px 0; font-size: 1.12rem; }
+.card-content p { margin: 0; font-size: 0.98rem; color: #666; }
+.dashboard-stats { margin-top: 28px; }
+.stats-grid { display: flex; flex-wrap: wrap; gap: 20px; }
+.stat-card { background: #f8fafd; border-radius: 10px; padding: 18px 22px; min-width: 180px; flex: 1 1 180px; display: flex; flex-direction: column; align-items: flex-start; }
+.stat-label { font-size: 0.98rem; color: #888; margin-bottom: 6px; }
+.stat-value { font-size: 1.45rem; font-weight: bold; color: #00A1B7; }
+.status-ok { color: #00B86B; }
+@media (max-width: 900px) {
+  .dashboard-cards, .stats-grid { flex-direction: column; gap: 16px; }
+  .dashboard-card, .stat-card { max-width: 100%; min-width: 0; }
+}
+</style>
+{% endblock %}

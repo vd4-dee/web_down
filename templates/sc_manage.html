@@ -1,0 +1,24 @@
+<!-- templates/sc_manage.html -->
+{% extends "layout.html" %}
+{% block content %}
+<div class="main-panel" id="schedule-manage-panel">
+    <h2>Schedule Download Management</h2>
+    <form id="schedule-form">
+        <label for="schedule-config-select">Select Configuration:</label>
+        <select id="schedule-config-select"></select>
+        <label for="schedule-datetime">Run At:</label>
+        <input type="datetime-local" id="schedule-datetime">
+        <button id="schedule-button" type="submit">Schedule Download</button>
+    </form>
+    <div id="schedules-list-container">
+        <table id="schedules-list" class="data-table">
+            <thead>
+                <tr><th>Job ID</th><th>Config</th><th>Run At</th><th>Status</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="5" class="subtext">No schedules yet.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

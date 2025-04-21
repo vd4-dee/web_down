@@ -61,6 +61,33 @@ def check_user_credentials(email, password):
         return False
     return str(password) == str(user_password)
 
+def get_user_permissions(email):
+    """
+    Returns list of permissions for the given email from Google Sheet.
+    Returns ['owner'] if owner, or list of permissions, or empty list if not found.
+    """
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets']
+        creds = Credentials.from_service_account_file(GOOGLE_CREDENTIALS_FILE, scopes=scopes)
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(GOOGLE_SHEET_ID)
+        worksheet = sh.worksheet('allowed_users')
+        rows = worksheet.get_all_records()
+        for row in rows:
+            row_email = row.get('email')
+            if row_email and row_email.strip().lower() == email.strip().lower():
+                perms = row.get('permissions', '')
+                if not perms:
+                    return []
+                perms = [p.strip() for p in perms.split(',') if p.strip()]
+                if 'owner' in perms:
+                    return ['owner']
+                return perms
+        return []
+    except Exception as e:
+        print("ERROR in get_user_permissions:", e)
+        raise
+
 def update_user_password(email, new_password):
     """
     Update the password for the given email in Google Sheet.

@@ -1,1 +1,0 @@
-// No sidebar toggle needed as it's fixed

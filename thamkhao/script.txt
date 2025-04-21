@@ -333,6 +333,13 @@ document.addEventListener('DOMContentLoaded', () => {
             filterTable(reportTableSearchInput, reportTableBody);
         });
     }
+    // --- Navigation & Panel Switching ---
+    function switchPanel(targetId) {
+        console.log("Switching to panel:", targetId);
+        if (!targetId) return;
+        mainPanels.forEach(panel => panel.style.display = 'none');
+        // If switching to active downloads panel, refresh its content immediately
+        if (targetId === 'active-downloads-panel') {
             renderActiveSessions();
         }
         sidebarLinks.forEach(link => link.classList.remove('active'));
@@ -647,7 +654,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showDownloadTimer && showDownloadTimer(); // Hiện timer khi bắt đầu tải
             // Add to active sessions
             addActiveSession(sessionId, sessionStartTime, currentData.reports);
-            const result = await fetchData('/api/start-download', {
+            const result = await fetchData('/start-download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(currentData),

@@ -1,0 +1,30 @@
+User Guide: Download History
+
+---
+
+**Chức năng:** Download History (Lịch sử tải báo cáo)
+
+**Mô tả:**
+Chức năng này cho phép người dùng xem lại lịch sử các lần tải báo cáo của mình, bao gồm thời gian, loại báo cáo và trạng thái tải. Chỉ những người dùng có quyền "download.history" hoặc "owner" mới truy cập được chức năng này.
+
+**Các bước sử dụng:**
+1. Đăng nhập vào hệ thống bằng email và mật khẩu được cấp.
+2. Trên sidebar, chọn mục **Download History**.
+3. Xem danh sách lịch sử tải, có thể lọc theo thời gian hoặc loại báo cáo.
+
+**Lưu ý:**
+- Nếu không thấy mục này trên sidebar, vui lòng liên hệ quản trị viên để được cấp quyền.
+- Nếu có vấn đề về lịch sử tải, liên hệ: khangvd4@fpt.com
+
+**Các quyền liên quan:**
+- `download.history`: Cho phép xem lịch sử tải báo cáo.
+- `owner`: Toàn quyền truy cập mọi chức năng.
+
+---
+
+**Hướng dẫn sử dụng chi tiết kèm hình ảnh sẽ được cập nhật khi hệ thống hoàn thiện.**
+
+---
+
+**Mọi thắc mắc, vui lòng liên hệ:**
+- Email: khangvd4@fpt.com

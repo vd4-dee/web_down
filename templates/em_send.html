@@ -1,0 +1,18 @@
+<!-- templates/em_send.html -->
+{% extends "layout.html" %}
+{% block content %}
+<div class="main-panel" id="email-send-panel">
+    <h2>Bulk Email Sender</h2>
+    <form id="bulk-email-form">
+        <label for="email-list">Recipient Emails (comma separated):</label>
+        <textarea id="email-list" rows="3"></textarea>
+        <label for="email-subject">Subject:</label>
+        <input type="text" id="email-subject">
+        <label for="email-body">Body:</label>
+        <textarea id="email-body" rows="5"></textarea>
+        <button id="send-email-button" type="submit">Send Emails</button>
+        <span id="email-loading-indicator" style="display:none;">Sending...</span>
+    </form>
+    <div id="email-status-messages"></div>
+</div>
+{% endblock %}

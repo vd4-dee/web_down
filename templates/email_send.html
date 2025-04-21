@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block title %}Bulk Email{% endblock %}
+{% block content %}
+<h1 class="main-title">Bulk Email Sender</h1>
+<form id="bulk-email-form">
+    <div class="form-group">
+        <label for="email-subject">Subject:</label>
+        <input type="text" id="email-subject" name="subject" required>
+    </div>
+    <div class="form-group">
+        <label for="email-body">Body:</label>
+        <textarea id="email-body" name="body" rows="6" required></textarea>
+    </div>
+    <div class="form-group">
+        <label for="email-recipients">Recipients:</label>
+        <textarea id="email-recipients" name="recipients" rows="4" required></textarea>
+    </div>
+    <div class="form-group">
+        <label for="email-attachment">Attachment:</label>
+        <input type="file" id="email-attachment" name="attachment">
+    </div>
+    <button type="submit" id="send-email-button">Send Emails</button>
+    <span id="email-loading-indicator" style="display:none;">Sending... <i class="fas fa-spinner fa-spin"></i></span>
+</form>
+<div class="progress-status-block">
+    <h2>Email Sending Status</h2>
+    <div id="email-status-messages"><p class="subtext">No activity yet.</p></div>
+</div>
+<script src="{{ url_for('static', filename='js/email_send.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block title %}Download History{% endblock %}
+{% block content %}
+<h1 class="main-title">Download History</h1>
+<!-- Table hiển thị lịch sử download -->
+<div class="table-responsive">
+    <table class="data-table" id="log-data-table">
+        <thead>
+            <tr>
+                <th>SessionID</th>
+                <th>Timestamp</th>
+                <th>File Name</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Status</th>
+                <th>Error Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="7" class="subtext">No log data available.</td></tr>
+        </tbody>
+    </table>
+</div>
+<script src="{{ url_for('static', filename='js/dl_history.js') }}"></script>
+{% endblock %}

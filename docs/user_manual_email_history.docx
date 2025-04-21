@@ -1,0 +1,30 @@
+User Guide: Email History
+
+---
+
+**Chức năng:** Email History (Lịch sử gửi email)
+
+**Mô tả:**
+Chức năng này cho phép người dùng xem lại lịch sử các lần gửi email hàng loạt, bao gồm thời gian, danh sách người nhận, trạng thái gửi và nội dung email. Chỉ những người dùng có quyền "email.history" hoặc "owner" mới truy cập được chức năng này.
+
+**Các bước sử dụng:**
+1. Đăng nhập vào hệ thống bằng email và mật khẩu được cấp.
+2. Trên sidebar, chọn mục **Email History**.
+3. Xem danh sách lịch sử gửi email, có thể lọc theo thời gian hoặc trạng thái gửi.
+
+**Lưu ý:**
+- Nếu không thấy mục này trên sidebar, vui lòng liên hệ quản trị viên để được cấp quyền.
+- Nếu có vấn đề về lịch sử gửi email, liên hệ: khangvd4@fpt.com
+
+**Các quyền liên quan:**
+- `email.history`: Cho phép xem lịch sử gửi email.
+- `owner`: Toàn quyền truy cập mọi chức năng.
+
+---
+
+**Hướng dẫn sử dụng chi tiết kèm hình ảnh sẽ được cập nhật khi hệ thống hoàn thiện.**
+
+---
+
+**Mọi thắc mắc, vui lòng liên hệ:**
+- Email: khangvd4@fpt.com

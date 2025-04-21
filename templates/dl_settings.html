@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block title %}Advanced Settings{% endblock %}
+{% block content %}
+<h1 class="main-title">Advanced Settings</h1>
+<form id="advanced-settings-form">
+    <div class="form-group">
+        <label for="otp-secret">OTP Secret:</label>
+        <input type="password" id="otp-secret" name="otp_secret" value="{{ default_otp_secret or '' }}">
+    </div>
+    <div class="form-group">
+        <label for="driver-path">ChromeDriver Path:</label>
+        <input type="text" id="driver-path" name="driver_path" value="{{ default_driver_path or '' }}">
+    </div>
+    <div class="form-group">
+        <label for="download-base-path">Download Base Path:</label>
+        <input type="text" id="download-base-path" name="download_base_path" value="{{ default_download_base_path or '' }}">
+    </div>
+    <button id="save-advanced-settings">Save Settings</button>
+</form>
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+{% endblock %}

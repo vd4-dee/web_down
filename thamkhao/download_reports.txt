@@ -1,0 +1,181 @@
+{% extends "layout.html" %}
+{% block title %}Download Reports{% endblock %}
+{% block content %}
+
+<div id="notification" class="notification">
+    <span id="notification-message"></span>
+    <button id="notification-close" class="notification-close">×</button>
+</div>
+
+<h1 id="section-title" class="main-title">Download Reports</h1>
+<section class="suggestion-cards">
+    <div class="card" data-target="main-download-panel">
+        <i class="fas fa-download card-icon"></i>
+        <div class="card-content">
+            <h3 class="card-title">Download Reports</h3>
+            <p class="card-description">Configure and download multiple reports.</p>
+        </div>
+        <button class="card-button">Open</button>
+    </div>
+    <div class="card" data-target="scheduling-panel">
+        <i class="fas fa-calendar-alt card-icon"></i>
+        <div class="card-content">
+            <h3 class="card-title">Schedule Download</h3>
+            <p class="card-description">Automate your report downloads based on saved configurations.</p>
+        </div>
+        <button class="card-button">Open</button>
+    </div>
+    <div class="card" data-target="log-panel">
+        <i class="fas fa-history card-icon"></i>
+        <div class="card-content">
+            <h3 class="card-title">Download History</h3>
+            <p class="card-description">View past download activities and logs.</p>
+        </div>
+        <button class="card-button">Open</button>
+    </div>
+    <div class="card" data-target="active-downloads-panel">
+        <i class="fas fa-tasks card-icon"></i>
+        <div class="card-content">
+            <h3 class="card-title">Active Downloads</h3>
+            <p class="card-description">Monitor ongoing download sessions.</p>
+        </div>
+        <button class="card-button">Open</button>
+    </div>
+    <div class="card" data-target="advanced-settings-panel">
+        <i class="fas fa-cog card-icon"></i>
+        <div class="card-content">
+            <h3 class="card-title">Advanced Settings</h3>
+            <p class="card-description">Configure application-level settings (optional).</p>
+        </div>
+        <button class="card-button">Open</button>
+    </div>
+</section>
+
+<div class="main-panel" id="main-download-panel" style="display: block;">
+    <!-- Configuration Management -->
+    <div class="config-management-block">
+        <h2>Configuration Management</h2>
+        <div class="form-group">
+            <label for="config-name">Configuration Name:</label>
+            <input type="text" id="config-name" placeholder="E.g., Monthly Reports">
+            <button id="save-config-button">Save Current Config</button>
+        </div>
+        <div class="form-group">
+            <label for="saved-configs-dropdown">Load/Delete Config:</label>
+            <select id="saved-configs-dropdown">
+                <option value="">-- Select Configuration --</option>
+            </select>
+            <div class="btn-group-config">
+                <button id="load-config-button">Load</button>
+                <button id="delete-config-button" class="delete-button">Delete</button>
+            </div>
+        </div>
+    </div>
+    <!-- Download Configuration -->
+    <div class="download-config-block">
+        <h2>Download Configuration</h2>
+        <form id="download-form" autocomplete="off">
+            <!-- Email, Password, Table Controls, Report Rows -->
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="text" id="email" name="email" value="{{ default_email or '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <div style="position: relative;">
+                    <input type="password" id="password" name="password" required style="padding-right: 36px;">
+                    <button type="button" id="toggle-password-visibility" aria-label="Show/Hide password"><i class="fas fa-eye"></i></button>
+                </div>
+            </div>
+            <hr class="divider">
+            <div class="table-controls">
+                <input type="text" id="report-table-search" placeholder="Search reports...">
+                <button type="button" id="add-row-button">Add Report</button>
+            </div>
+            <div class="table-responsive">
+                <table id="report-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Report Name</th>
+                            <th>From Date</th>
+                            <th>To Date</th>
+                            <th>Chunk Size</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><select name="report_type[]" required><option value="">-- Select Report --</option></select></td>
+                            <td><input type="date" name="from_date[]" required></td>
+                            <td><input type="date" name="to_date[]" required></td>
+                            <td><input type="text" name="chunk_size[]" placeholder="E.g.: 5 or month"></td>
+                            <td><button type="button" class="remove-row-button"><i class="fas fa-trash-alt"></i></button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="region-selection" style="display: none;"></div>
+            <div class="table-controls">
+                <button type="submit" id="download-button">Download All</button>
+                <span id="loading-indicator">Processing... <i class="fas fa-spinner fa-spin"></i></span>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="progress-status-block">
+    <h2>Progress Status</h2>
+    <div id="status-messages"><p class="subtext">No activity yet.</p></div>
+</div>
+
+<div class="main-panel" id="bulk-email-panel" style="display: none;">
+    <h2>Bulk Email Sender</h2>
+    <form id="bulk-email-form">
+        <div class="form-group"><label for="email-subject">Subject:</label><input type="text" id="email-subject" name="subject" required></div>
+        <div class="form-group"><label for="email-body">Body:</label><textarea id="email-body" name="body" rows="6" required></textarea></div>
+        <div class="form-group"><label for="email-recipients">Recipients:</label><textarea id="email-recipients" name="recipients" rows="4" required></textarea></div>
+        <div class="form-group"><label for="email-attachment">Attachment:</label><input type="file" id="email-attachment" name="attachment"></div>
+        <button type="submit" id="send-email-button">Send Emails</button>
+        <span id="email-loading-indicator">Sending... <i class="fas fa-spinner fa-spin"></i></span>
+    </form>
+    <div class="progress-status-block">
+        <h2>Email Sending Status</h2>
+        <div id="email-status-messages"><p class="subtext">No activity yet.</p></div>
+    </div>
+</div>
+
+<div class="main-panel" id="scheduling-panel" style="display: none;">
+    <h2>Schedule Download Jobs</h2>
+    <form id="schedule-form">
+        <!-- schedule configuration inputs -->
+        <button id="schedule-button">Schedule Job</button>
+    </form>
+    <div class="active-schedules"><h3>Active Schedules</h3><table class="data-table"><tbody id="schedules-list"><tr><td class="subtext">No schedules available.</td></tr></tbody></table></div>
+</div>
+
+<div class="main-panel" id="log-panel" style="display: none;">
+    <div class="log-summary-container">
+        <div class="summary-item">Total: <span id="total-count">0</span></div>
+        <div class="summary-item success">Success: <span id="success-count">0</span></div>
+        <div class="summary-item failed">Failed: <span id="failed-count">0</span></div>
+        <div class="chart-container"><canvas id="status-chart"></canvas></div>
+    </div>
+    <div class="table-controls"><input type="text" id="log-table-search" placeholder="Search logs..."></div>
+    <div class="table-responsive"><table id="log-data-table" class="data-table"><thead><tr><th>SessionID</th><th>Timestamp</th><th>File Name</th><th>Start Date</th><th>End Date</th><th>Status</th><th>Error Message</th></tr></thead><tbody><tr><td colspan="7" class="subtext">No log data available.</td></tr></tbody></table></div>
+</div>
+
+<div class="main-panel" id="active-downloads-panel" style="display: none;">
+    <h2>Active Download Sessions</h2>
+    <div class="table-responsive"><table class="data-table" id="active-downloads-table"><thead><tr><th>SessionID</th><th>Start Time</th><th>Elapsed Time</th></tr></thead><tbody id="active-downloads-list"><tr><td colspan="3" class="subtext">No active downloads.</td></tr></tbody></table></div>
+</div>
+
+<div class="main-panel" id="advanced-settings-panel" style="display: none;">
+    <h2>Advanced Settings</h2>
+    <div class="form-group"><label for="otp-secret">OTP Secret:</label><input type="password" id="otp-secret"></div>
+    <div class="form-group"><label for="driver-path">ChromeDriver Path:</label><input type="text" id="driver-path"></div>
+    <div class="form-group"><label for="download-base-path">Download Base Path:</label><input type="text" id="download-base-path"></div>
+    <button id="save-advanced-settings">Save Settings</button>
+</div>
+
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+{% endblock %}

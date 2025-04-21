@@ -1,0 +1,63 @@
+<aside id="sidebar">
+  <button id="sidebar-toggle" aria-label="Toggle sidebar" style="position:absolute;top:16px;right:-18px;background:#fff;border:1px solid #e0e6ef;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 6px rgba(34,43,58,0.07);z-index:1100;">
+    <i class="fas fa-angle-double-left"></i>
+  </button>
+  <div class="sidebar-title"><img src="{{ url_for('static', filename='img/logo.png') }}" class="logo-img" alt="Report Downloader" /></div>
+  <nav>
+    <ul>
+      {% set perms = permissions or [] %}
+      {# Download Reports Group #}
+      {% if 'owner' in perms or perms|select('search', '^download')|list %}
+      <li>
+        <a href="#" class="sidebar-group" data-group="download">
+          <i class="fas fa-download sidebar-icon"></i>
+          <span>Download Reports</span>
+        </a>
+      </li>
+      {% endif %}
+      {# Bulk Email Group #}
+      {% if 'owner' in perms or perms|select('search', '^email')|list %}
+      <li>
+        <a href="#" class="sidebar-group" data-group="email">
+          <i class="fas fa-envelope sidebar-icon"></i>
+          <span>Bulk Email</span>
+        </a>
+      </li>
+      {% endif %}
+      {# Các nhóm khác tương tự, có thể bổ sung thêm ở đây #}
+      {# New feature groups #}
+      {% if 'owner' in perms or perms|select('search', '^extract')|list %}
+      <li>
+        <a href="#" class="sidebar-group coming-soon" data-group="extract">
+          <i class="fas fa-file-archive sidebar-icon"></i>
+          <span>Extract Files <small class="coming-soon">(coming soon)</small></span>
+        </a>
+      </li>
+      {% endif %}
+      {% if 'owner' in perms or perms|select('search', '^bank')|list %}
+      <li>
+        <a href="#" class="sidebar-group coming-soon" data-group="bank">
+          <i class="fas fa-university sidebar-icon"></i>
+          <span>Check Bank Account <small class="coming-soon">(coming soon)</small></span>
+        </a>
+      </li>
+      {% endif %}
+      {% if 'owner' in perms or perms|select('search', '^fda')|list %}
+      <li>
+        <a href="#" class="sidebar-group coming-soon" data-group="fda">
+          <i class="fas fa-file-invoice sidebar-icon"></i>
+          <span>Download Invoice FDA <small class="coming-soon">(coming soon)</small></span>
+        </a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+  <div style="padding: 18px; border-top: 1px solid #f0f0f0; text-align: center; font-size: 0.97em; color: #888;">
+    <i class="fas fa-user"></i> {{ session['user_email'] or 'Guest' }}
+    <div style="margin-top: 12px;">
+      <a href="{{ url_for('user_manuals') }}" style="color: #2d6cdf; text-decoration: none; font-size: 1em;">
+        <i class="fas fa-book"></i> User Manuals
+      </a>
+    </div>
+  </div>
+</aside>

@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+{% block title %}User Manuals{% endblock %}
+{% block content %}
+<h2>User Manuals / Hướng dẫn sử dụng</h2>
+<ul style="margin-top: 18px;">
+    <li>
+        <a href="{{ url_for('static', filename='docs/user_manual_download_reports.docx') }}" download>
+            <i class="fas fa-file-word" style="color:#2d6cdf;"></i> Download Reports
+        </a>
+    </li>
+    <li>
+        <a href="{{ url_for('static', filename='docs/user_manual_bulk_email.docx') }}" download>
+            <i class="fas fa-file-word" style="color:#2d6cdf;"></i> Bulk Email
+        </a>
+    </li>
+    <li>
+        <a href="{{ url_for('static', filename='docs/user_manual_schedule_download.docx') }}" download>
+            <i class="fas fa-file-word" style="color:#2d6cdf;"></i> Schedule Download
+        </a>
+    </li>
+    <li>
+        <a href="{{ url_for('static', filename='docs/user_manual_download_history.docx') }}" download>
+            <i class="fas fa-file-word" style="color:#2d6cdf;"></i> Download History
+        </a>
+    </li>
+    <li>
+        <a href="{{ url_for('static', filename='docs/user_manual_advanced_settings.docx') }}" download>
+            <i class="fas fa-file-word" style="color:#2d6cdf;"></i> Advanced Settings
+        </a>
+    </li>
+    <li>
+        <a href="{{ url_for('static', filename='docs/user_manual_email_history.docx') }}" download>
+            <i class="fas fa-file-word" style="color:#2d6cdf;"></i> Email History
+        </a>
+    </li>
+    {# Các nhóm chức năng khác sẽ bổ sung tại đây #}
+</ul>
+<p style="margin-top: 32px; color: #888; font-size: 0.97em;">Nếu bạn cần hỗ trợ thêm, vui lòng liên hệ: <a href="mailto:khangvd4@fpt.com">khangvd4@fpt.com</a></p>
+{% endblock %}

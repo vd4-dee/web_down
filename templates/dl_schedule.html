@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block title %}Schedule Download{% endblock %}
+{% block content %}
+<h1 class="main-title">Schedule Download Jobs</h1>
+<form id="schedule-form">
+    <div class="form-group">
+        <label for="config-name">Configuration:</label>
+        <select id="config-name" name="config_name"></select>
+    </div>
+    <div class="form-group">
+        <label for="run-datetime">Run At:</label>
+        <input type="datetime-local" id="run-datetime" name="run_datetime" required>
+    </div>
+    <button id="schedule-button">Schedule Job</button>
+</form>
+<div class="active-schedules">
+    <h3>Active Schedules</h3>
+    <table class="data-table">
+        <tbody id="schedules-list">
+            <tr><td class="subtext">No schedules available.</td></tr>
+        </tbody>
+    </table>
+</div>
+<script src="{{ url_for('static', filename='js/dl_schedule.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "layout.html" %}
+{% block title %}Download Reports{% endblock %}
+{% block content %}
+{% include 'sidebar.html' with context %}
+<!-- Nội dung cũ giữ nguyên, chỉ sửa các url_for và truyền biến permissions -->
+<div id="notification" class="notification">
+    <span id="notification-message"></span>
+    <button id="notification-close" class="notification-close">×</button>
+</div>
+<h1 id="section-title" class="main-title">Download Reports</h1>
+<section class="suggestion-cards">
+    <div class="card" onclick='window.location.href="{{ url_for("download.index") }}"'>
+        <i class="fas fa-download card-icon"></i>
+        <div class="card-content">
+            <h3 class="card-title">Download Reports</h3>
+            <p class="card-description">Configure and download multiple reports.</p>
+        </div>
+        <button class="card-button">Open</button>
+    </div>
+    <div class="card" onclick='window.location.href="{{ url_for("schedule.index") }}"'>
+        <i class="fas fa-calendar-alt card-icon"></i>
+        <div class="card-content">
+            <h3 class="card-title">Schedule Download</h3>
+            <p class="card-description">Automate your report downloads based on saved configurations.</p>
+        </div>
+        <button class="card-button">Open</button>
+    </div>
+    <div class="card" onclick='window.location.href="{{ url_for("download.download_history") }}"'>
+        <i class="fas fa-history card-icon"></i>
+        <div class="card-content">
+            <h3 class="card-title">Download History</h3>
+            <p class="card-description">View past download activities and logs.</p>
+        </div>
+        <button class="card-button">Open</button>
+    </div>
+    <div class="card" onclick='window.location.href="{{ url_for("download.advanced_settings") }}"'>
+        <i class="fas fa-cog card-icon"></i>
+        <div class="card-content">
+            <h3 class="card-title">Advanced Settings</h3>
+            <p class="card-description">Configure application-level settings (optional).</p>
+        </div>
+        <button class="card-button">Open</button>
+    </div>
+</section>
+<div class="main-panel" id="main-download-panel" style="display: block;">
+    <!-- Configuration Management -->
+    <div class="config-management-block">
+        <h2>Configuration Management</h2>
+        <div class="form-group">
+            <label for="config-name">Configuration Name:</label>
+            <input type="text" id="config-name" placeholder="E.g., Monthly Reports">
+            <button id="save-config-button">Save Current Config</button>
+        </div>
+        <div class="form-group">
+            <label for="saved-configs-dropdown">Load/Delete Config:</label>
+            <select id="saved-configs-dropdown">
+                <option value="">-- Select Configuration --</option>
+            </select>
+            <div class="btn-group-config">
+                <button id="load-config-button">Load</button>
+                <button id="delete-config-button" class="delete-button">Delete</button>
+            </div>
+        </div>
+    </div>
+    <!-- Download Configuration -->
+    <div class="download-config-block">
+        <h2>Download Configuration</h2>
+        <form id="download-form" autocomplete="off">
+            <!-- Email, Password, Table Controls, Report Rows -->
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="text" id="email" name="email" value="{{ default_email or '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <div style="position: relative;">
+                    <input type="password" id="password" name="password" required style="padding-right: 36px;">
+                    <button type="button" id="toggle-password-visibility" aria-label="Show/Hide password"><i class="fas fa-eye"></i></button>
+                </div>
+            </div>
+            <hr class="divider">
+            <div class="table-controls" style="display: flex; align-items: center; gap: 16px; margin-bottom: 10px;">
+                <input type="text" id="report-table-search" class="table-search" placeholder="Search reports..." autocomplete="off" style="flex:1; max-width:260px;">
+                <button type="button" id="add-row-button" title="Add another report row"><i class="fas fa-plus"></i> Add Report</button>
+            </div>
+            <div class="table-responsive">
+                <table id="report-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Report Name</th>
+                            <th>From Date</th>
+                            <th>To Date</th>
+                            <th>Chunk Size</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <select name="report_type[]" class="report-type-select" required>
+                                    <option value="">-- Select Report --</option>
+                                    {% for report in reports %}
+                                    <option value="{{ report.name }}">{{ report.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td><input type="date" name="from_date[]" required></td>
+                            <td><input type="date" name="to_date[]" required></td>
+                            <td><input type="text" name="chunk_size[]" value="5" placeholder="E.g.: 5 or month"></td>
+                            <td><button type="button" class="remove-row-button" title="Remove this report row"><i class="fas fa-trash-alt"></i></button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="table-controls">
+                <button type="submit" id="download-button">Download All</button>
+                <span id="loading-indicator">Processing... <i class="fas fa-spinner fa-spin"></i></span>
+            </div>
+        </form>
+    </div>
+</div>
+<div class="progress-status-block">
+    <h2>Progress Status</h2>
+    <div id="status-messages"><p class="subtext">No activity yet.</p></div>
+</div>
+<script src="{{ url_for('static', filename='js/dl_reports.js') }}"></script>
+{% endblock %}

@@ -32,7 +32,7 @@
                 <input type="password" id="password" name="password" required placeholder="Enter your password">
             </div>
             <div style="text-align: right; margin-bottom: 10px;">
-                <a href="{{ url_for('auth.change_password') }}" style="font-size: 0.98rem; color: #00A1B7; text-decoration: underline;">Forgot password?</a>
+                <a href="{{ url_for('change_password') }}" style="font-size: 0.98rem; color: #00A1B7; text-decoration: underline;">Forgot password?</a>
             </div>
             <button type="submit" class="login-btn"><i class="fas fa-sign-in-alt"></i> Sign in</button>
         </form>

@@ -318,6 +318,27 @@ body.sidebar-collapsed #main-content {
     background-color: #0089a7; /* Darker blue on hover */
 }
 
+/* Styles for horizontal subfeature links inside card-content */
+.card-subfeatures {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 8px;
+}
+.card-subfeatures a {
+    display: inline-block;
+    color: #00A1B7;
+    text-decoration: none;
+    font-size: 0.9rem;
+    padding: 4px 8px;
+    border: 1px solid #00A1B7;
+    border-radius: 4px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+.card-subfeatures a:hover {
+    background-color: #00A1B7;
+    color: #fff;
+}
 
 /* Main Panel Styles */
 .main-panel {

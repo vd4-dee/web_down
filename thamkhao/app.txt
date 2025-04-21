@@ -31,40 +31,19 @@ app.secret_key = 'your_secret_key_here'  # Đặt secret key cho session/flash
 # --- Import Google Sheet Auth ---
 from auth_google_sheet import is_user_allowed
 
-# --- Register Blueprints ---
-from blueprints.auth import auth_bp
-from blueprints.main import main_bp
-from blueprints.download import download_bp
-from blueprints.email import email_bp
-from blueprints.schedule import schedule_bp
-from blueprints.config_mgmt import config_bp
-from blueprints.sse import sse_bp
-
-app.register_blueprint(auth_bp)  # /login, /logout, /change_password
-app.register_blueprint(main_bp)  # /
-app.register_blueprint(download_bp)  # /download/
-app.register_blueprint(email_bp)  # /email/
-app.register_blueprint(schedule_bp)  # /schedule/
-app.register_blueprint(config_bp)  # /api/config
-app.register_blueprint(sse_bp)    # /stream-status
+# Module Blueprints
+from modules.email import email_bp
+app.register_blueprint(email_bp, url_prefix='/email')
 
 # Constants
 CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'configs.json')
-LOG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'logs', 'download_log.csv')
+LOG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'download_log.csv') # Match logic_download default?
 
-# --- Ensure log file exists with header ---
-def ensure_log_file():
-    log_dir = os.path.dirname(LOG_FILE_PATH)
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
-    if not os.path.exists(LOG_FILE_PATH):
-        with open(LOG_FILE_PATH, 'w', encoding='utf-8') as f:
-            f.write('SessionID,Timestamp,File Name,Start Date,End Date,Status,Error Message\n')
-
-ensure_log_file()
-
-# Global state (import từ globals)
-from globals import status_messages, is_running, download_thread, lock
+# Global state
+status_messages = []
+is_running = False
+download_thread = None
+lock = threading.Lock() # Protects is_running, status_messages, config file, scheduler
 
 # Scheduler Setup
 jobstores = {'default': MemoryJobStore()}
@@ -109,7 +88,6 @@ def stream_status_update(message):
 
 
 # --- Download Process Function ---
-from logic_download import run_download_process
 def run_download_process(params):
     """Main download function executed in a background thread."""
     global is_running, status_messages
@@ -357,28 +335,278 @@ def trigger_scheduled_download(config_name):
     scheduled_thread.daemon = True
     scheduled_thread.start()
 
-# --- Flask Routes REMOVED: All routes moved to blueprints. ---
-# from auth_google_sheet import is_user_allowed
-# from flask import session, flash, redirect, url_for
+# --- Flask Routes ---
+from auth_google_sheet import is_user_allowed
+from flask import session, flash, redirect, url_for
 
-# --- All authentication routes moved to blueprints/auth.py ---
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+        from auth_google_sheet import check_user_credentials, get_user_permissions
+        if check_user_credentials(email, password):
+            session['user_email'] = email
+            try:
+                permissions = get_user_permissions(email)
+                session['permissions'] = permissions
+            except Exception as e:
+                flash('Could not load user permissions: {}'.format(e))
+                session['permissions'] = []
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid email or password.')
+    return render_template('login.html')
 
-# --- Download, schedule, history, and settings routes moved to blueprints/download.py and blueprints/schedule.py ---
+@app.route('/change_password', methods=['GET', 'POST'])
+def change_password():
+    from auth_google_sheet import check_user_credentials, update_user_password
+    if request.method == 'POST':
+        email = request.form['email']
+        old_password = request.form['old_password']
+        new_password = request.form['new_password']
+        if not (email and old_password and new_password):
+            flash('Please fill in all fields.')
+            return render_template('change_password.html')
+        if not check_user_credentials(email, old_password):
+            flash('Current password is incorrect.')
+            return render_template('change_password.html')
+        if old_password == new_password:
+            flash('New password must be different from current password.')
+            return render_template('change_password.html')
+        try:
+            updated = update_user_password(email, new_password)
+            if updated:
+                flash('Password changed successfully. Please log in with your new password.')
+                return redirect(url_for('login'))
+            else:
+                flash('Email not found.')
+        except Exception as e:
+            flash('An error occurred: {}'.format(e))
+    return render_template('change_password.html')
 
-# --- Email and history routes moved to blueprints/email.py ---
+@app.route('/download')
+def download_reports():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    permissions = session.get('permissions', [])
+    return render_template('download_reports.html', permissions=permissions)
 
-# --- User manuals route moved to blueprints/main.py or blueprints/download.py as needed ---
+@app.route('/schedule_download')
+def schedule_download():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    permissions = session.get('permissions', [])
+    return render_template('coming_soon.html', permissions=permissions, title='Schedule Download')
 
-# --- Logout route moved to blueprints/auth.py ---
+@app.route('/download_history')
+def download_history():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    permissions = session.get('permissions', [])
+    return render_template('coming_soon.html', permissions=permissions, title='Download History')
 
-# --- Main dashboard route moved to blueprints/main.py ---
+@app.route('/advanced_settings')
+def advanced_settings():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    permissions = session.get('permissions', [])
+    return render_template('coming_soon.html', permissions=permissions, title='Advanced Settings')
 
-# --- API endpoint for reports/regions moved to blueprints/download.py ---
+@app.route('/bulk_email')
+def bulk_email():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    permissions = session.get('permissions', [])
+    return render_template('coming_soon.html', permissions=permissions, title='Bulk Email')
 
-# --- Download start API moved to blueprints/download.py ---
+@app.route('/email_history')
+def email_history():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    permissions = session.get('permissions', [])
+    return render_template('coming_soon.html', permissions=permissions, title='Send History')
+
+@app.route('/user_manuals')
+def user_manuals():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    permissions = session.get('permissions', [])
+    return render_template('user_manuals.html', permissions=permissions)
+
+@app.route('/logout')
+def logout():
+    session.pop('user_email', None)
+    return redirect(url_for('login'))
+
+@app.route('/')
+def index():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    return render_template('index.html',
+                           default_email=config.DEFAULT_EMAIL,
+                           default_password=config.DEFAULT_PASSWORD,
+                           default_otp_secret=config.OTP_SECRET,
+                           default_driver_path=config.DRIVER_PATH,
+                           default_download_base_path=config.DOWNLOAD_BASE_PATH)
+
+@app.route('/get-reports-regions', methods=['GET'])
+def get_reports_regions_data():
+    """Provide report names, region info, and required URLs."""
+    try:
+        report_url_map = link_report.get_report_url()
+        report_names = list(report_url_map.keys()) if report_url_map else []
+        regions_info = {idx: data['name'] for idx, data in regions_data.items()}
+        return jsonify({
+            'reports': report_names,
+            'regions': regions_info,
+            'region_required_urls': config.REGION_REQUIRED_REPORT_URLS,
+            'report_urls_map': report_url_map
+        })
+    except Exception as e:
+        print(f"Error in /get-reports-regions: {e}")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": "Could not load report/region data."}), 500
+
+@app.route('/start-download', methods=['POST'])
+def handle_start_download():
+    """Handles manual download request from the UI."""
+    global is_running, download_thread
+    print("\n--- Received request for /start-download ---")
+
+    with lock:
+        if is_running:
+            print("/start-download: Process already running.")
+            return jsonify({'status': 'error', 'message': 'A download process is already running. Please wait.'}), 409 # 409 Conflict
+
+    try:
+        data = request.get_json()
+        if not data:
+            print("/start-download: No JSON data.")
+            return jsonify({'status': 'error', 'message': 'Invalid request: No data received.'}), 400
+        print(f"/start-download: Received data: {json.dumps(data)}")
+
+        # --- Backend Validation of received structure (matches script.js getCurrentFormData) ---
+        errors = []
+        if not data.get('email') or not data.get('password'):
+            errors.append('Missing email or password.')
+        # Check 'reports' list structure
+        reports_data = data.get('reports')
+        if not isinstance(reports_data, list) or not reports_data:
+            errors.append('Missing or invalid reports configuration (must be a non-empty list).')
+        else:
+            for i, report_entry in enumerate(reports_data):
+                if not isinstance(report_entry, dict):
+                    errors.append(f'Report entry {i+1} is not a valid object.')
+                    continue
+                if not report_entry.get('report_type'): errors.append(f'Missing report type for entry {i+1}.')
+                if not report_entry.get('from_date'): errors.append(f'Missing from_date for entry {i+1}.')
+                if not report_entry.get('to_date'): errors.append(f'Missing to_date for entry {i+1}.')
+                # Chunk size is optional, defaults handled later
+
+        # Check 'regions' structure (must be list of strings if present)
+        regions_data = data.get('regions')
+        if regions_data is not None and not isinstance(regions_data, list):
+            errors.append('Invalid regions format (must be a list of strings).')
+        elif isinstance(regions_data, list):
+             if not all(isinstance(r, str) for r in regions_data):
+                 errors.append('Invalid regions format (list must contain strings).')
+
+        # Region requirement check (redundant with frontend check, but good practice)
+        region_required_for_any = False
+        report_urls_map = link_report.get_report_url()
+        if report_urls_map and isinstance(reports_data, list):
+            for report_entry in reports_data:
+                 if isinstance(report_entry, dict):
+                     report_url = report_urls_map.get(report_entry.get('report_type'))
+                     if report_url in config.REGION_REQUIRED_REPORT_URLS:
+                         region_required_for_any = True
+                         break
+        if region_required_for_any and (not isinstance(regions_data, list) or not regions_data):
+             errors.append('One or more selected reports require region selection, but none were provided.')
+
+        if errors:
+            error_message = "Validation Failed: " + " ".join(errors)
+            print(f"/start-download: {error_message}")
+            return jsonify({'status': 'error', 'message': error_message}), 400
+
+        print("/start-download: Validation successful.")
+        # --- End Validation ---
+
+    except Exception as e:
+        print(f"/start-download: Error processing request data: {e}")
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': f'Error processing request data: {e}'}), 400
+
+    # --- Start Background Thread ---
+    try:
+        print("/start-download: Starting download thread...")
+        # Pass the validated data (which has the correct nested structure)
+        thread_data = data.copy()
+        # Clear previous thread reference before starting new one
+        with lock:
+            download_thread = None # Clear old reference if any
+        download_thread = threading.Thread(target=run_download_process, args=(thread_data,))
+        download_thread.daemon = True
+        download_thread.start()
+        print("/start-download: Download thread started successfully.")
+        return jsonify({'status': 'started', 'message': 'Report download process initiated.'})
+
+    except Exception as e:
+        print(f"/start-download: Failed to start download thread: {e}")
+        traceback.print_exc()
+        # Reset running state if thread failed to start
+        with lock:
+            is_running = False
+        return jsonify({'status': 'error', 'message': f'Internal Server Error: Failed to start download process ({e}).'}), 500
 
 
-# --- SSE stream-status route moved to blueprints/sse.py ---
+@app.route('/stream-status')
+def stream_status_events():
+    """SSE endpoint for status updates."""
+    def event_stream():
+        last_yielded_index = 0
+        keep_running = True
+        try:
+            while keep_running:
+                with lock:
+                    current_message_count = len(status_messages)
+                    is_process_active = is_running # Check state inside lock
+                    messages_to_yield = status_messages[last_yielded_index:current_message_count]
+
+                if messages_to_yield:
+                    for message in messages_to_yield:
+                        yield f"data: {message}\n\n"
+                    last_yielded_index = current_message_count
+
+                # Check finish condition *after* yielding messages
+                if not is_process_active and last_yielded_index == current_message_count:
+                    # Small delay to ensure FINISHED is likely the last message
+                    time.sleep(0.1)
+                    # Verify again if status changed during sleep (unlikely but possible)
+                    with lock:
+                        final_process_check = is_running
+                        final_message_count = len(status_messages)
+                    # Only send FINISHED if process is *still* not running
+                    # and no new messages arrived during the brief sleep
+                    if not final_process_check and last_yielded_index == final_message_count:
+                        yield f"data: FINISHED\n\n"
+                        keep_running = False
+                        break # Exit while loop
+                    else:
+                        # Process restarted or new messages came in, continue loop
+                        pass
+
+                # Wait before checking again
+                time.sleep(0.5)
+
+        except GeneratorExit:
+            print("SSE client disconnected.")
+            keep_running = False
+        finally:
+            print("SSE stream closing.")
+
+    return Response(event_stream(), mimetype='text/event-stream')
 
 
 @app.route('/get-logs', methods=['GET'])
@@ -422,10 +650,154 @@ def get_download_logs():
     return jsonify({'status': response_status, 'message': message, 'logs': logs_data}), status_code
 
 # --- Configuration Endpoints ---
-# --- Config management API routes moved to blueprints/config_mgmt.py ---
+@app.route('/get-configs', methods=['GET'])
+def get_configs():
+    """Gets saved configuration names."""
+    configs = load_configs()
+    return jsonify({'status': 'success', 'configs': list(configs.keys())})
+
+@app.route('/save-config', methods=['POST'])
+def save_config():
+    """Saves or updates a named configuration."""
+    try:
+        data = request.get_json()
+        if not data: return jsonify({'status': 'error', 'message': 'Invalid request: No data.'}), 400
+
+        config_name = data.get('config_name')
+        # config_data should have the structure from getCurrentFormData
+        config_data = data.get('config_data')
+
+        if not config_name or not config_data:
+            return jsonify({'status': 'error', 'message': 'Missing configuration name or data.'}), 400
+
+        # Validate the structure being saved (matches expected run structure)
+        if not isinstance(config_data.get('reports'), list):
+             return jsonify({'status': 'error', 'message': 'Invalid config data: "reports" must be a list.'}), 400
+        if 'password' in config_data and config_data['password']:
+             print(f"WARNING: Saving config '{config_name}' which includes a password.")
+
+        configs = load_configs()
+        configs[config_name] = config_data
+        save_configs(configs)
+
+        return jsonify({'status': 'success', 'message': f'Configuration "{config_name}" saved.'})
+
+    except Exception as e:
+        print(f"Error saving config: {e}")
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': f'Internal error saving configuration: {e}'}), 500
+
+@app.route('/load-config/<config_name>', methods=['GET'])
+def load_config(config_name):
+    """Loads details of a specific configuration."""
+    configs = load_configs()
+    config_data = configs.get(config_name)
+    if config_data:
+        return jsonify({'status': 'success', 'config_data': config_data})
+    else:
+        return jsonify({'status': 'error', 'message': f'Configuration "{config_name}" not found.'}), 404
+
+@app.route('/delete-config/<config_name>', methods=['DELETE'])
+def delete_config(config_name):
+    """Deletes a saved configuration."""
+    configs = load_configs()
+    if config_name in configs:
+        del configs[config_name]
+        save_configs(configs)
+        return jsonify({'status': 'success', 'message': f'Configuration "{config_name}" deleted.'})
+    else:
+        return jsonify({'status': 'error', 'message': f'Configuration "{config_name}" not found.'}), 404
 
 # --- Scheduling API Endpoints ---
-# --- Schedule management API routes moved to blueprints/schedule.py ---
+@app.route('/schedule-job', methods=['POST'])
+def schedule_job():
+    """Schedules a new download job."""
+    try:
+        data = request.get_json()
+        if not data: return jsonify({'status': 'error', 'message': 'Invalid request: No data.'}), 400
+
+        config_name = data.get('config_name')
+        run_datetime_str = data.get('run_datetime')
+
+        print(f"Received schedule request: config='{config_name}', datetime='{run_datetime_str}'")
+
+        if not config_name: return jsonify({'status': 'error', 'message': 'Configuration name required.'}), 400
+        if not run_datetime_str: return jsonify({'status': 'error', 'message': 'Run date/time required.'}), 400
+
+        configs = load_configs()
+        if config_name not in configs:
+             return jsonify({'status': 'error', 'message': f'Configuration "{config_name}" not found.'}), 404
+
+        job_id = f"sched_{config_name.replace(' ','_').lower()}_{int(time.time())}"
+
+        try:
+            run_datetime_naive = datetime.fromisoformat(run_datetime_str)
+            # Schedule based on UTC time
+            if run_datetime_naive <= datetime.now() + timedelta(seconds=60):
+                return jsonify({'status': 'error', 'message': 'Scheduled time must be > 1 min in the future.'}), 400
+            # APScheduler interprets naive datetime as belonging to its configured timezone (UTC)
+            trigger = DateTrigger(run_date=run_datetime_naive)
+        except ValueError:
+             return jsonify({'status': 'error', 'message': 'Invalid date/time format (YYYY-MM-DDTHH:MM).'}), 400
+
+        with lock: # Protect scheduler access
+            scheduler.add_job(
+                func=trigger_scheduled_download, trigger=trigger, args=[config_name],
+                id=job_id, name=f"Download: {config_name}", replace_existing=False,
+                misfire_grace_time=600 # Allow 10 mins late run
+            )
+        print(f"Successfully added job {job_id} to scheduler.")
+        return jsonify({'status': 'success', 'message': f'Job scheduled for config "{config_name}".', 'job_id': job_id})
+
+    except Exception as e:
+        print(f"Error scheduling job: {e}")
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': f'Failed to schedule job: {e}'}), 500
+
+@app.route('/get-schedules', methods=['GET'])
+def get_schedules():
+    """Gets the list of currently scheduled jobs."""
+    jobs_info = []
+    try:
+        with lock: # Protect scheduler access
+            jobs = scheduler.get_jobs()
+            for job in jobs:
+                next_run_iso = None
+                if job.next_run_time:
+                    try: # next_run_time is timezone-aware (UTC)
+                        next_run_iso = job.next_run_time.isoformat()
+                    except Exception as fmt_e:
+                        print(f"Error formatting next_run_time for job {job.id}: {fmt_e}")
+                        next_run_iso = str(job.next_run_time) # Fallback
+                jobs_info.append({
+                    'id': job.id, 'name': job.name,
+                    'next_run_time': next_run_iso,
+                    'trigger': str(job.trigger),
+                    'args': job.args # Contains config_name
+                })
+        return jsonify({'status': 'success', 'schedules': jobs_info})
+    except Exception as e:
+        print(f"Error getting schedules: {e}")
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': f'Failed to get schedules: {e}'}), 500
+
+@app.route('/cancel-schedule/<job_id>', methods=['DELETE'])
+def cancel_schedule(job_id):
+    """Cancels (removes) a scheduled job."""
+    print(f"Received request to cancel job: {job_id}")
+    try:
+        with lock: # Protect scheduler access
+            scheduler.remove_job(job_id)
+        print(f"Removed job {job_id} from scheduler.")
+        return jsonify({'status': 'success', 'message': f'Job "{job_id}" cancelled.'})
+    except JobLookupError:
+        print(f"Job {job_id} not found for cancellation.")
+        # Return success as the job is gone (idempotent)
+        return jsonify({'status': 'success', 'message': f'Job "{job_id}" not found (already run or cancelled).'})
+    except Exception as e:
+        print(f"Error cancelling job {job_id}: {e}")
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': f'Failed to cancel job "{job_id}": {e}'}), 500
 
 # --- Main Execution ---
 if __name__ == '__main__':

@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block title %}Email History{% endblock %}
+{% block content %}
+<h1 class="main-title">Email History</h1>
+<div class="table-responsive">
+    <table class="data-table" id="email-history-table">
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Subject</th>
+                <th>Recipients</th>
+                <th>Status</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="5" class="subtext">No email history available.</td></tr>
+        </tbody>
+    </table>
+</div>
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+{% endblock %}

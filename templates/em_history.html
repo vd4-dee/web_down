@@ -1,0 +1,17 @@
+<!-- templates/em_history.html -->
+{% extends "layout.html" %}
+{% block content %}
+<div class="main-panel" id="email-history-panel">
+    <h2>Email Send History</h2>
+    <div id="email-history-table-container">
+        <table id="email-history-table" class="data-table">
+            <thead>
+                <tr><th>Timestamp</th><th>Recipients</th><th>Subject</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="4" class="subtext">No history yet.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
